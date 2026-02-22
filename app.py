@@ -186,12 +186,17 @@ TARGET_KEYWORDS = {
     'greenland': {
         'keywords': [
             'greenland', 'grønland', 'kalaallit nunaat',
-            'denmark greenland', 'greenland us', 'greenland trump',
-            'greenland acquisition', 'greenland sovereignty',
-            'greenland nato', 'greenland arctic', 'thule air base',
-            'pituffik space base', 'nuuk', 'greenland independence',
-            'greenland autonomy', 'greenland rare earth',
-            'múte egede', 'greenland mineral'
+            'greenland sovereignty', 'greenland acquisition', 'greenland trump',
+            'greenland nato', 'greenland arctic', 'greenland denmark',
+            'thule air base', 'pituffik space base', 'nuuk',
+            'greenland independence', 'greenland autonomy',
+            'greenland rare earth', 'greenland critical minerals',
+            'greenland military base', 'greenland us military',
+            'múte egede', 'greenland mineral',
+            'arctic sovereignty', 'arctic nato', 'arctic military',
+            'canadian arctic dispute', 'trump greenland purchase',
+            'greenland referendum', 'greenland self-rule',
+            'greenland strategic', 'greenland china', 'greenland mining'
         ],
         'reddit_keywords': [
             'Greenland', 'Denmark', 'Arctic', 'Trump Greenland',
@@ -1114,9 +1119,15 @@ def fetch_notams_for_region(region_key):
     icao_query = ' OR '.join(region['icao_codes'][:3])
     display_name = region['display_name']
 
-    # Search GDELT for NOTAM-related news
+    # Search GDELT for NOTAM-related news (broad patterns)
     try:
-        notam_query = f"({display_name} NOTAM) OR ({display_name} airspace) OR ({icao_query} airspace)"
+        notam_query = (
+            f"({display_name} NOTAM) OR ({display_name} airspace) OR ({icao_query} airspace) OR "
+            f"({display_name} airspace closed) OR ({display_name} airspace restriction) OR "
+            f"({display_name} no-fly zone) OR ({display_name} GPS jamming) OR "
+            f"({display_name} military exercise airspace) OR ({display_name} drone airspace) OR "
+            f"({display_name} flight restriction) OR ({display_name} aviation warning)"
+        )
         params = {
             'query': notam_query,
             'mode': 'artlist',
@@ -1226,13 +1237,36 @@ def scan_european_flight_disruptions(all_articles):
         'Wizz Air', 'EasyJet', 'LOT Polish', 'SAS', 'Finnair',
         'Norwegian Air', 'Aeroflot', 'Turkish Airlines', 'Swiss Air',
         'Austrian Airlines', 'Brussels Airlines', 'TAP Portugal',
-        'Icelandair', 'Air Baltic', 'Condor'
+        'Icelandair', 'Air Baltic', 'Condor', 'Pegasus Airlines',
+        'Ukraine International', 'Belavia', 'Nordica', 'airBaltic',
+        'Eurowings', 'Transavia', 'Volotea', 'Air Europa'
     ]
 
     flight_keywords = [
-        'cancel', 'suspend', 'halt', 'ground', 'divert',
-        'disruption', 'delay', 'reroute', 'avoid airspace',
-        'close airspace', 'banned from', 'restricted'
+        'cancel', 'cancelled', 'cancellation', 'cancellations',
+        'suspend', 'suspended', 'suspension',
+        'halt', 'halted', 'ground', 'grounded',
+        'divert', 'diverted', 'diversion',
+        'disruption', 'disrupted', 'disruptions',
+        'delay', 'delayed', 'delays',
+        'reroute', 'rerouted',
+        'avoid airspace', 'avoiding airspace',
+        'close airspace', 'closed airspace', 'airspace closed', 'airspace closure',
+        'banned from', 'restricted', 'restriction',
+        'no-fly zone', 'no fly zone',
+        'flight ban', 'overflight ban',
+        'stranded passengers', 'travel chaos',
+        'flights affected', 'routes affected'
+    ]
+
+    # Generic flight disruption patterns (no specific airline needed)
+    generic_flight_patterns = [
+        'flights to', 'flights from', 'flights over',
+        'all flights', 'commercial flights', 'civilian flights',
+        'international flights', 'domestic flights',
+        'air traffic', 'air travel', 'aviation',
+        'flight operations', 'airport closed', 'airport closure',
+        'runway closed', 'terminal closed'
     ]
 
     for article in all_articles:
@@ -1240,27 +1274,50 @@ def scan_european_flight_disruptions(all_articles):
         description = (article.get('description') or '').lower()
         text = f"{title} {description}"
 
-        # Check if article mentions a European airline + flight disruption
+        matched_airline = None
+        matched_keyword = None
+
+        # First pass: check for specific airline + disruption keyword
         for airline in european_airlines:
             if airline.lower() in text:
                 for keyword in flight_keywords:
                     if keyword in text:
-                        disruptions.append({
-                            'airline': airline,
-                            'status': 'suspended' if any(k in text for k in ['suspend', 'halt', 'cancel', 'ground']) else 'disrupted',
-                            'destination': extract_destination(text),
-                            'reason': extract_disruption_reason(text),
-                            'date': article.get('publishedAt', ''),
-                            'source': article.get('source', {}).get('name', 'Unknown'),
-                            'source_url': article.get('url', ''),
-                            'title': article.get('title', '')
-                        })
+                        matched_airline = airline
+                        matched_keyword = keyword
                         break
-            # Only one disruption per article per airline
-            if any(d['airline'] == airline for d in disruptions[-1:]):
-                break
+                if matched_airline:
+                    break
 
-    # Deduplicate by airline
+        # Second pass: check for generic flight disruption (no airline name needed)
+        if not matched_airline:
+            has_flight_context = any(pattern in text for pattern in generic_flight_patterns)
+            has_disruption = any(keyword in text for keyword in flight_keywords)
+            # Must also mention a European location to stay relevant
+            has_europe_context = any(loc.lower() in text for loc in [
+                'ukraine', 'russia', 'poland', 'baltic', 'europe', 'european',
+                'greenland', 'denmark', 'moldova', 'romania', 'belarus',
+                'kaliningrad', 'crimea', 'kyiv', 'moscow', 'warsaw',
+                'nato', 'arctic'
+            ])
+
+            if has_flight_context and has_disruption and has_europe_context:
+                matched_airline = 'Multiple/Unspecified'
+                matched_keyword = next((k for k in flight_keywords if k in text), 'disruption')
+
+        if matched_airline and matched_keyword:
+            status = 'suspended' if any(k in text for k in ['suspend', 'halt', 'cancel', 'ground', 'ban', 'closed']) else 'disrupted'
+            disruptions.append({
+                'airline': matched_airline,
+                'status': status,
+                'destination': extract_destination(text),
+                'reason': extract_disruption_reason(text),
+                'date': article.get('publishedAt', ''),
+                'source': article.get('source', {}).get('name', 'Unknown'),
+                'source_url': article.get('url', ''),
+                'title': article.get('title', '')
+            })
+
+    # Deduplicate by airline + destination
     seen = set()
     unique = []
     for d in disruptions:
@@ -1535,13 +1592,38 @@ def api_europe_flights():
                 'rate_limit': get_rate_limit_info()
             }), 429
 
-        # Quick scan of recent news for flight disruptions
-        query = 'Europe flight cancel OR suspend OR airspace closed OR divert'
-        articles = fetch_newsapi_articles(query, days=3)
-        gdelt_articles = fetch_gdelt_articles(query, days=3, language='eng')
+        # Multi-query scan for flight disruptions across Europe
+        flight_queries = [
+            'Europe flight cancelled OR suspended OR grounded OR diverted',
+            'airline cancel flights Ukraine OR Russia OR Poland OR Baltic',
+            'airspace closed Europe OR Ukraine OR Russia OR Poland OR Baltic',
+            'NOTAM airspace restriction Europe',
+            'Ryanair OR Lufthansa OR Wizz Air cancel OR suspend flights',
+            'flight disruption war zone Europe',
+            'aviation safety Europe conflict'
+        ]
 
-        all_articles = articles + gdelt_articles
-        disruptions = scan_european_flight_disruptions(all_articles)
+        all_articles = []
+        for fq in flight_queries:
+            try:
+                all_articles.extend(fetch_newsapi_articles(fq, days=3))
+            except Exception as e:
+                print(f"[Europe v1.0] Flight query error: {e}")
+            try:
+                all_articles.extend(fetch_gdelt_articles(fq, days=3, language='eng'))
+            except Exception as e:
+                print(f"[Europe v1.0] Flight GDELT query error: {e}")
+
+        # Deduplicate by URL
+        seen_urls = set()
+        unique_articles = []
+        for a in all_articles:
+            url = a.get('url', '')
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                unique_articles.append(a)
+
+        disruptions = scan_european_flight_disruptions(unique_articles)
 
         return jsonify({
             'success': True,

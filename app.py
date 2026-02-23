@@ -149,16 +149,16 @@ def _refresh_all_caches():
         except Exception as e:
             print(f"[Background Refresh] ✗ Flights failed: {e}")
 
-        # Refresh travel advisories
-          try:
-              print("[Background Refresh] Refreshing travel advisories...")
-              ta_data = _run_travel_advisory_scan()
-              cache_set('travel_advisories', ta_data)
-              print(f"[Background Refresh] ✓ Travel advisories cached ({len(ta_data.get('advisories', {}))} countries)")
-          except Exception as e:
-              print(f"[Background Refresh] ✗ Travel advisories failed: {e}")
+        time.sleep(5)
 
-          time.sleep(5)
+        # Refresh travel advisories
+        try:
+            print("[Background Refresh] Refreshing travel advisories...")
+            ta_data = _run_travel_advisory_scan()
+            cache_set('travel_advisories', ta_data)
+            print(f"[Background Refresh] ✓ Travel advisories cached ({len(ta_data.get('advisories', {}))} countries)")
+        except Exception as e:
+            print(f"[Background Refresh] ✗ Travel advisories failed: {e}")
 
         elapsed = time.time() - start
         print(f"[Background Refresh] Complete in {elapsed:.1f}s. Sleeping {CACHE_TTL}s until next refresh.\n")

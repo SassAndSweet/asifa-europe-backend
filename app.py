@@ -25,7 +25,7 @@ v1.1.0 — Added in-memory response caching + background refresh thread
 """
 
 from flask import Flask, jsonify, request
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 import requests
 from datetime import datetime, timezone, timedelta
 import os
@@ -1654,6 +1654,7 @@ def _run_flight_scan():
         'success': True,
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'total_disruptions': len(disruptions),
+        'disruptions': disruptions,
         'cancellations': disruptions,
         'version': '1.1.0-europe'
     }
@@ -1835,6 +1836,7 @@ def api_europe_notams():
 
 
 @app.route('/api/europe/flights', methods=['GET'])
+@cross_origin()
 def api_europe_flights():
     """European flight disruptions endpoint. Cached with ?force=true override."""
     try:
@@ -1864,6 +1866,7 @@ def api_europe_flights():
         return jsonify({
             'success': False,
             'error': str(e),
+            'disruptions': [],
             'cancellations': []
         }), 500
 

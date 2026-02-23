@@ -121,7 +121,7 @@ def _refresh_all_caches():
             try:
                 print(f"[Background Refresh] Refreshing {target}...")
                 data = _run_threat_scan(target, days=7)
-                cache_set(f'threat_{target}', data)
+                cache_set(f'threat_{target}_7d', data)
                 print(f"[Background Refresh] ✓ {target} cached (probability: {data.get('probability', '?')}%)")
             except Exception as e:
                 print(f"[Background Refresh] ✗ {target} failed: {e}")
@@ -1587,6 +1587,7 @@ def _run_threat_scan(target, days=7):
         'articles_fr': [a for a in all_articles if a.get('language') == 'fr'][:20],
         'articles_uk': [a for a in all_articles if a.get('language') == 'uk'][:20],
         'articles_reddit': [a for a in all_articles if a.get('source', {}).get('name', '').startswith('r/')][:20],
+        'days_analyzed': days,
         'version': '1.1.0-europe'
     }
 
@@ -1680,7 +1681,7 @@ def api_europe_threat(target):
                 'error': f"Invalid target. Must be one of: {', '.join(TARGET_KEYWORDS.keys())}"
             }), 400
 
-        cache_key = f'threat_{target}'
+        cache_key = f'threat_{target}_{days}d'
 
         # Return cached data if available and not forced
         if not force:
@@ -1736,6 +1737,7 @@ def api_europe_dashboard():
     """
     try:
         force = request.args.get('force', 'false').lower() == 'true'
+        days = int(request.args.get('days', 7))
         targets = list(TARGET_KEYWORDS.keys())
 
         dashboard = {
@@ -1748,7 +1750,7 @@ def api_europe_dashboard():
         all_cached = True
 
         for target in targets:
-            cache_key = f'threat_{target}'
+            cache_key = f'threat_{target}_{days}d'
 
             if not force:
                 cached = cache_get(cache_key)
@@ -1776,7 +1778,7 @@ def api_europe_dashboard():
                 }
                 continue
 
-            data = _run_threat_scan(target, days=7)
+            data = _run_threat_scan(target, days=days)
             cache_set(cache_key, data)
 
             dashboard['countries'][target] = {

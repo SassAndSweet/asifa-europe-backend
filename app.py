@@ -1664,6 +1664,7 @@ def _run_flight_scan():
 # API ENDPOINTS
 # ========================================
 @app.route('/api/europe/threat/<target>', methods=['GET'])
+@cross_origin()
 def api_europe_threat(target):
     """
     Main threat assessment endpoint for European targets.

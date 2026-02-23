@@ -179,9 +179,9 @@ def start_background_refresh():
 TRAVEL_ADVISORY_API = "https://cadataapi.state.gov/api/TravelAdvisories"
 
 TRAVEL_ADVISORY_CODES = {
-    'greenland': ['GL', 'DK'],
-    'ukraine': ['UA'],
-    'russia': ['RU'],
+    'greenland': ['GL', 'DA'],
+    'ukraine': ['UP'],
+    'russia': ['RS'],
     'poland': ['PL']
 }
 

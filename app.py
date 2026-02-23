@@ -149,6 +149,17 @@ def _refresh_all_caches():
         except Exception as e:
             print(f"[Background Refresh] ✗ Flights failed: {e}")
 
+        # Refresh travel advisories
+          try:
+              print("[Background Refresh] Refreshing travel advisories...")
+              ta_data = _run_travel_advisory_scan()
+              cache_set('travel_advisories', ta_data)
+              print(f"[Background Refresh] ✓ Travel advisories cached ({len(ta_data.get('advisories', {}))} countries)")
+          except Exception as e:
+              print(f"[Background Refresh] ✗ Travel advisories failed: {e}")
+
+          time.sleep(5)
+
         elapsed = time.time() - start
         print(f"[Background Refresh] Complete in {elapsed:.1f}s. Sleeping {CACHE_TTL}s until next refresh.\n")
 
@@ -162,6 +173,24 @@ def start_background_refresh():
     thread.start()
     print("[Background Refresh] Thread started — will refresh all caches every 4 hours")
 
+# ========================================
+# U.S. STATE DEPT TRAVEL ADVISORIES
+# ========================================
+TRAVEL_ADVISORY_API = "https://cadataapi.state.gov/api/TravelAdvisories"
+
+TRAVEL_ADVISORY_CODES = {
+    'greenland': ['GL', 'DK'],
+    'ukraine': ['UA'],
+    'russia': ['RU'],
+    'poland': ['PL']
+}
+
+TRAVEL_ADVISORY_LEVELS = {
+    1: {'label': 'Exercise Normal Precautions', 'short': 'Normal Precautions', 'color': '#10b981'},
+    2: {'label': 'Exercise Increased Caution', 'short': 'Increased Caution', 'color': '#f59e0b'},
+    3: {'label': 'Reconsider Travel', 'short': 'Reconsider Travel', 'color': '#f97316'},
+    4: {'label': 'Do Not Travel', 'short': 'Do Not Travel', 'color': '#ef4444'}
+}
 
 # ========================================
 # SOURCE WEIGHTS — EUROPEAN EDITION
@@ -1443,6 +1472,92 @@ def extract_disruption_reason(text):
         return 'Security concerns'
     return 'Unspecified disruption'
 
+# ========================================
+# TRAVEL ADVISORY SCAN FUNCTION
+# ========================================
+def _run_travel_advisory_scan():
+    """Fetch all travel advisories from State Dept and extract our targets."""
+    print("[Europe v1.1] Travel Advisories: Fetching from State Dept API...")
+    results = {}
+
+    try:
+        response = requests.get(TRAVEL_ADVISORY_API, timeout=20)
+        if response.status_code != 200:
+            print(f"[Europe v1.1] Travel Advisories: HTTP {response.status_code}")
+            return {'success': False, 'error': f'HTTP {response.status_code}', 'advisories': {}}
+
+        all_advisories = response.json()
+        print(f"[Europe v1.1] Travel Advisories: Got {len(all_advisories)} total advisories")
+
+        for target, codes in TRAVEL_ADVISORY_CODES.items():
+            for advisory in all_advisories:
+                cats = advisory.get('Category', [])
+                if any(code in cats for code in codes):
+                    title = advisory.get('Title', '')
+                    level_match = re.search(r'Level\s+(\d)', title)
+                    level = int(level_match.group(1)) if level_match else None
+                    published = advisory.get('Published', '')
+                    updated = advisory.get('Updated', '')
+                    link = advisory.get('Link', '')
+                    summary_html = advisory.get('Summary', '')
+
+                    # Extract first paragraph as short summary
+                    short_summary = ''
+                    summary_match = re.search(r'<p[^>]*>(.*?)</p>', summary_html, re.DOTALL)
+                    if summary_match:
+                        short_summary = re.sub(r'<[^>]+>', '', summary_match.group(1)).strip()
+
+                    # Detect if recently changed (within last 30 days)
+                    recently_changed = False
+                    change_description = ''
+                    try:
+                        updated_dt = datetime.fromisoformat(updated.replace('Z', '+00:00'))
+                        age_days = (datetime.now(timezone.utc) - updated_dt).days
+                        recently_changed = age_days <= 30
+
+                        change_match = re.search(
+                            r'(advisory level was (?:increased|decreased|raised|lowered|changed).*?\.)',
+                            summary_html, re.IGNORECASE
+                        )
+                        if change_match:
+                            change_description = re.sub(r'<[^>]+>', '', change_match.group(1)).strip()
+                        elif recently_changed:
+                            if 'no change' in summary_html.lower() or 'no changes to the advisory level' in summary_html.lower():
+                                change_description = 'Updated (level unchanged)'
+                            else:
+                                change_description = f'Updated {age_days} day{"s" if age_days != 1 else ""} ago'
+                    except Exception:
+                        pass
+
+                    level_info = TRAVEL_ADVISORY_LEVELS.get(level, {})
+
+                    results[target] = {
+                        'country_code': cats[0] if cats else '',
+                        'title': title,
+                        'level': level,
+                        'level_label': level_info.get('label', 'Unknown'),
+                        'level_short': level_info.get('short', 'Unknown'),
+                        'level_color': level_info.get('color', '#6b7280'),
+                        'published': published,
+                        'updated': updated,
+                        'recently_changed': recently_changed,
+                        'change_description': change_description,
+                        'short_summary': short_summary,
+                        'link': link
+                    }
+                    print(f"[Europe v1.1] Travel Advisory: {target} -> Level {level} ({level_info.get('short', '?')})")
+                    break
+
+    except Exception as e:
+        print(f"[Europe v1.1] Travel Advisories error: {e}")
+        return {'success': False, 'error': str(e), 'advisories': {}}
+
+    return {
+        'success': True,
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'advisories': results,
+        'version': '1.1.0-europe'
+    }
 
 # ========================================
 # INTERNAL SCAN FUNCTIONS (used by both
@@ -1873,6 +1988,29 @@ def api_europe_flights():
             'cancellations': []
         }), 500
 
+@app.route('/api/europe/travel-advisories', methods=['GET'])
+@cross_origin()
+def api_europe_travel_advisories():
+    """U.S. State Dept Travel Advisories for European targets. Cached 24h."""
+    try:
+        force = request.args.get('force', 'false').lower() == 'true'
+
+        if not force:
+            cached = cache_get('travel_advisories')
+            if cached:
+                cached['cached'] = True
+                cached['cache_age_seconds'] = int(cache_age('travel_advisories') or 0)
+                return jsonify(cached)
+
+        data = _run_travel_advisory_scan()
+        data['cached'] = False
+        cache_set('travel_advisories', data)
+
+        return jsonify(data)
+
+    except Exception as e:
+        print(f"Error in /api/europe/travel-advisories: {e}")
+        return jsonify({'success': False, 'error': str(e), 'advisories': {}}), 500
 
 @app.route('/api/europe/cache-status', methods=['GET'])
 def api_cache_status():

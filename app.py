@@ -360,7 +360,6 @@ DIPLOMATIC_SIGNAL_KEYWORDS = {
 # DE-ESCALATION KEYWORDS
 # ========================================
 DEESCALATION_KEYWORDS = [
-DEESCALATION_KEYWORDS = [
     'ceasefire', 'cease-fire', 'truce', 'peace talks', 'peace agreement',
     'diplomatic solution', 'negotiations', 'de-escalation', 'de-escalate',
     'tensions ease', 'tensions cool', 'tensions subside', 'calm',

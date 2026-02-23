@@ -1,5 +1,5 @@
 """
-Asifah Analytics — Europe Backend v1.0.0
+Asifah Analytics — Europe Backend v1.1.0
 February 22, 2026
 
 European Conflict Probability Dashboard Backend
@@ -14,6 +14,13 @@ Adapted for European geopolitical monitoring with:
   - European flight disruption tracking
   - Military posture integration hooks
 
+v1.1.0 — Added in-memory response caching + background refresh thread
+  - All threat/NOTAM/flight data cached in memory with 4-hour TTL
+  - Background thread refreshes all caches every 4 hours automatically
+  - Normal page loads return cached data in <100ms
+  - Force fresh scan with ?force=true query parameter
+  - /api/europe/dashboard endpoint returns all 4 country scores in one call
+
 © 2026 Asifah Analytics. All rights reserved.
 """
 
@@ -26,6 +33,8 @@ import time
 import re
 import math
 import xml.etree.ElementTree as ET
+import threading
+import json
 
 app = Flask(__name__)
 CORS(app)
@@ -36,6 +45,9 @@ CORS(app)
 NEWSAPI_KEY = os.environ.get('NEWSAPI_KEY')
 GDELT_BASE_URL = "http://api.gdeltproject.org/api/v2/doc/doc"
 
+# Cache TTL in seconds (4 hours)
+CACHE_TTL = 4 * 60 * 60
+
 # Rate limiting
 RATE_LIMIT = 100
 RATE_LIMIT_WINDOW = 86400
@@ -43,6 +55,113 @@ rate_limit_data = {
     'requests': 0,
     'reset_time': time.time() + RATE_LIMIT_WINDOW
 }
+
+# ========================================
+# IN-MEMORY RESPONSE CACHE
+# ========================================
+_cache = {}
+_cache_lock = threading.Lock()
+
+
+def cache_get(key):
+    """Get a cached response if it exists and is fresh."""
+    with _cache_lock:
+        entry = _cache.get(key)
+        if entry is None:
+            return None
+        age = time.time() - entry['timestamp']
+        if age > CACHE_TTL:
+            return None  # Stale
+        return entry['data']
+
+
+def cache_set(key, data):
+    """Store a response in the cache."""
+    with _cache_lock:
+        _cache[key] = {
+            'data': data,
+            'timestamp': time.time()
+        }
+
+
+def cache_age(key):
+    """Return how many seconds old a cache entry is, or None if missing."""
+    with _cache_lock:
+        entry = _cache.get(key)
+        if entry is None:
+            return None
+        return time.time() - entry['timestamp']
+
+
+def cache_clear(key=None):
+    """Clear one key or entire cache."""
+    with _cache_lock:
+        if key:
+            _cache.pop(key, None)
+        else:
+            _cache.clear()
+
+
+# ========================================
+# BACKGROUND REFRESH THREAD
+# ========================================
+def _refresh_all_caches():
+    """
+    Refresh all cached data in the background.
+    Runs every CACHE_TTL seconds so no user request ever triggers a cold scan.
+    """
+    targets = list(TARGET_KEYWORDS.keys())
+
+    while True:
+        print(f"\n[Background Refresh] Starting full cache refresh at {datetime.now(timezone.utc).isoformat()}")
+        start = time.time()
+
+        # Refresh each country threat assessment
+        for target in targets:
+            try:
+                print(f"[Background Refresh] Refreshing {target}...")
+                data = _run_threat_scan(target, days=7)
+                cache_set(f'threat_{target}', data)
+                print(f"[Background Refresh] ✓ {target} cached (probability: {data.get('probability', '?')}%)")
+            except Exception as e:
+                print(f"[Background Refresh] ✗ {target} failed: {e}")
+
+            # Small delay between targets to avoid hammering APIs
+            time.sleep(5)
+
+        # Refresh NOTAMs
+        try:
+            print("[Background Refresh] Refreshing NOTAMs...")
+            notam_data = _run_notam_scan()
+            cache_set('notams', notam_data)
+            print(f"[Background Refresh] ✓ NOTAMs cached ({notam_data.get('total_notams', 0)} alerts)")
+        except Exception as e:
+            print(f"[Background Refresh] ✗ NOTAMs failed: {e}")
+
+        time.sleep(5)
+
+        # Refresh flight disruptions
+        try:
+            print("[Background Refresh] Refreshing flights...")
+            flight_data = _run_flight_scan()
+            cache_set('flights', flight_data)
+            print(f"[Background Refresh] ✓ Flights cached ({flight_data.get('total_disruptions', 0)} disruptions)")
+        except Exception as e:
+            print(f"[Background Refresh] ✗ Flights failed: {e}")
+
+        elapsed = time.time() - start
+        print(f"[Background Refresh] Complete in {elapsed:.1f}s. Sleeping {CACHE_TTL}s until next refresh.\n")
+
+        # Sleep until next refresh cycle
+        time.sleep(CACHE_TTL)
+
+
+def start_background_refresh():
+    """Start the background refresh thread (daemon so it dies with the app)."""
+    thread = threading.Thread(target=_refresh_all_caches, daemon=True)
+    thread.start()
+    print("[Background Refresh] Thread started — will refresh all caches every 4 hours")
+
 
 # ========================================
 # SOURCE WEIGHTS — EUROPEAN EDITION
@@ -74,7 +193,7 @@ SOURCE_WEIGHTS = {
         'sources': [
             'CNN', 'MSNBC', 'Fox News', 'NBC News', 'CBS News',
             'ABC News', 'Bloomberg', 'CNBC', 'Sky News',
-            'Al Jazeera', 'RT'  # RT included but low-weighted via standard tier
+            'Al Jazeera', 'RT'
         ],
         'weight': 0.6
     },
@@ -257,7 +376,7 @@ TARGET_KEYWORDS = {
 # ========================================
 # REDDIT CONFIGURATION — EUROPE
 # ========================================
-REDDIT_USER_AGENT = "AsifahAnalytics-Europe/1.0.0 (OSINT monitoring tool)"
+REDDIT_USER_AGENT = "AsifahAnalytics-Europe/1.1.0 (OSINT monitoring tool)"
 REDDIT_SUBREDDITS = {
     'greenland': ['Greenland', 'europe', 'geopolitics', 'worldnews', 'Denmark'],
     'ukraine': ['ukraine', 'UkraineWarVideoReport', 'UkrainianConflict', 'europe', 'geopolitics', 'worldnews'],
@@ -269,33 +388,24 @@ REDDIT_SUBREDDITS = {
 # EUROPEAN ESCALATION KEYWORDS
 # ========================================
 ESCALATION_KEYWORDS = [
-    # Military action
     'strike', 'attack', 'bombing', 'airstrike', 'missile', 'rocket',
     'military operation', 'offensive', 'retaliate', 'retaliation',
     'response', 'counterattack', 'invasion', 'incursion',
     'shelling', 'artillery', 'drone strike', 'drone attack',
-    # Threats
     'threatens', 'warned', 'vowed', 'promised to strike',
     'will respond', 'severe response', 'consequences',
-    # Mobilization
     'mobilization', 'troops deployed', 'forces gathering',
     'military buildup', 'reserves called up',
-    # Casualties
     'killed', 'dead', 'casualties', 'wounded', 'injured',
     'death toll', 'fatalities',
-    # NATO / collective defense
     'article 5', 'collective defense', 'nato response',
-    # Nuclear
     'nuclear threat', 'nuclear posture', 'tactical nuclear',
-    # Airspace / sovereignty
     'airspace violation', 'airspace closed', 'no-fly zone',
     'sovereignty violation', 'territorial integrity',
-    # Flight disruptions
     'flight cancellations', 'cancelled flights', 'suspend flights',
     'suspended flights', 'airline suspends', 'halted flights',
     'grounded flights', 'travel advisory',
     'do not travel', 'avoid all travel', 'reconsider travel',
-    # European airlines
     'lufthansa suspend', 'lufthansa cancel',
     'air france suspend', 'air france cancel',
     'british airways suspend', 'british airways cancel',
@@ -306,7 +416,6 @@ ESCALATION_KEYWORDS = [
     'sas suspend', 'sas cancel',
     'finnair suspend', 'finnair cancel',
     'norwegian air suspend', 'norwegian air cancel',
-    # Border/hybrid
     'border incident', 'border violation', 'hybrid attack',
     'cyber attack', 'sabotage', 'disinformation'
 ]
@@ -328,20 +437,20 @@ NOTAM_REGIONS = {
         'flag': '🇵🇱'
     },
     'russia_west': {
-        'fir_codes': ['UUWV', 'ULLL', 'UMKK'],  # Moscow, St. Petersburg, Kaliningrad
+        'fir_codes': ['UUWV', 'ULLL', 'UMKK'],
         'icao_codes': ['UUEE', 'UUDD', 'ULLI', 'UMKK'],
         'display_name': 'Western Russia',
         'flag': '🇷🇺'
     },
     'baltic': {
-        'fir_codes': ['EYVL', 'EVRR', 'EETT'],  # Lithuania, Latvia, Estonia
+        'fir_codes': ['EYVL', 'EVRR', 'EETT'],
         'icao_codes': ['EYVI', 'EVRA', 'EETN'],
         'display_name': 'Baltic States',
         'flag': '🇪🇺'
     },
     'greenland': {
         'fir_codes': ['BGGL'],
-        'icao_codes': ['BGBW', 'BGSF', 'BGKK'],  # Narsarsuaq, Kangerlussuaq, Kulusuk
+        'icao_codes': ['BGBW', 'BGSF', 'BGKK'],
         'display_name': 'Greenland',
         'flag': '🇬🇱'
     },
@@ -365,7 +474,6 @@ NOTAM_REGIONS = {
     }
 }
 
-# Critical NOTAM keyword patterns
 NOTAM_CRITICAL_PATTERNS = [
     r'AIRSPACE\s+CLOSED',
     r'PROHIBITED\s+AREA',
@@ -389,7 +497,6 @@ NOTAM_CRITICAL_PATTERNS = [
 
 # ========================================
 # SCORING ALGORITHM HELPER FUNCTIONS
-# (Identical logic to Middle East backend)
 # ========================================
 def calculate_time_decay(published_date, current_time, half_life_days=2.0):
     """Calculate exponential time decay for article relevance"""
@@ -548,7 +655,6 @@ def calculate_threat_probability(articles, days_analyzed=7, target='ukraine'):
 
     weighted_score *= momentum_multiplier
 
-    # Scoring formula (same as ME v2.1)
     base_score = 25
     baseline_adjustment = TARGET_BASELINES.get(target, {}).get('base_adjustment', 0)
 
@@ -560,7 +666,7 @@ def calculate_threat_probability(articles, days_analyzed=7, target='ukraine'):
     probability = int(probability)
     probability = max(10, min(probability, 95))
 
-    print(f"[Europe v1.0] {target} scoring:")
+    print(f"[Europe v1.1] {target} scoring:")
     print(f"  Base score: {base_score}")
     print(f"  Baseline adjustment: {baseline_adjustment}")
     print(f"  Total articles: {len(articles)}")
@@ -632,7 +738,7 @@ def get_rate_limit_info():
 def fetch_newsapi_articles(query, days=7):
     """Fetch articles from NewsAPI"""
     if not NEWSAPI_KEY:
-        print("[Europe v1.0] NewsAPI: No API key configured")
+        print("[Europe v1.1] NewsAPI: No API key configured")
         return []
 
     from_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
@@ -655,12 +761,12 @@ def fetch_newsapi_articles(query, days=7):
             for article in articles:
                 article['language'] = 'en'
 
-            print(f"[Europe v1.0] NewsAPI: Fetched {len(articles)} articles")
+            print(f"[Europe v1.1] NewsAPI: Fetched {len(articles)} articles")
             return articles
-        print(f"[Europe v1.0] NewsAPI: HTTP {response.status_code}")
+        print(f"[Europe v1.1] NewsAPI: HTTP {response.status_code}")
         return []
     except Exception as e:
-        print(f"[Europe v1.0] NewsAPI error: {e}")
+        print(f"[Europe v1.1] NewsAPI error: {e}")
         return []
 
 
@@ -703,19 +809,19 @@ def fetch_gdelt_articles(query, days=7, language='eng'):
                     'language': lang_code
                 })
 
-            print(f"[Europe v1.0] GDELT {language}: Fetched {len(standardized)} articles")
+            print(f"[Europe v1.1] GDELT {language}: Fetched {len(standardized)} articles")
             return standardized
 
-        print(f"[Europe v1.0] GDELT {language}: HTTP {response.status_code}")
+        print(f"[Europe v1.1] GDELT {language}: HTTP {response.status_code}")
         return []
     except Exception as e:
-        print(f"[Europe v1.0] GDELT {language} error: {e}")
+        print(f"[Europe v1.1] GDELT {language} error: {e}")
         return []
 
 
 def fetch_reddit_posts(target, keywords, days=7):
     """Fetch Reddit posts from relevant subreddits"""
-    print(f"[Europe v1.0] Reddit: Starting fetch for {target}")
+    print(f"[Europe v1.1] Reddit: Starting fetch for {target}")
 
     subreddits = REDDIT_SUBREDDITS.get(target, [])
     if not subreddits:
@@ -777,13 +883,13 @@ def fetch_reddit_posts(target, keywords, days=7):
 
                         all_posts.append(normalized_post)
 
-                    print(f"[Europe v1.0] Reddit r/{subreddit}: Found {len(posts)} posts")
+                    print(f"[Europe v1.1] Reddit r/{subreddit}: Found {len(posts)} posts")
 
         except Exception as e:
-            print(f"[Europe v1.0] Reddit r/{subreddit} error: {str(e)}")
+            print(f"[Europe v1.1] Reddit r/{subreddit} error: {str(e)}")
             continue
 
-    print(f"[Europe v1.0] Reddit: Total {len(all_posts)} posts")
+    print(f"[Europe v1.1] Reddit: Total {len(all_posts)} posts")
     return all_posts
 
 
@@ -796,14 +902,14 @@ def fetch_kyiv_independent_rss():
     feed_url = 'https://kyivindependent.com/feed/'
 
     try:
-        print("[Europe v1.0] Kyiv Independent: Fetching RSS...")
+        print("[Europe v1.1] Kyiv Independent: Fetching RSS...")
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         response = requests.get(feed_url, headers=headers, timeout=15)
 
         if response.status_code != 200:
-            print(f"[Europe v1.0] Kyiv Independent: HTTP {response.status_code}")
+            print(f"[Europe v1.1] Kyiv Independent: HTTP {response.status_code}")
             return []
 
         root = ET.fromstring(response.content)
@@ -831,10 +937,10 @@ def fetch_kyiv_independent_rss():
                     'language': 'en'
                 })
 
-        print(f"[Europe v1.0] Kyiv Independent: ✓ Fetched {len(articles)} articles")
+        print(f"[Europe v1.1] Kyiv Independent: ✓ Fetched {len(articles)} articles")
 
     except Exception as e:
-        print(f"[Europe v1.0] Kyiv Independent error: {str(e)[:100]}")
+        print(f"[Europe v1.1] Kyiv Independent error: {str(e)[:100]}")
 
     return articles
 
@@ -845,14 +951,14 @@ def fetch_meduza_rss():
     feed_url = 'https://meduza.io/rss/en/all'
 
     try:
-        print("[Europe v1.0] Meduza: Fetching RSS...")
+        print("[Europe v1.1] Meduza: Fetching RSS...")
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         response = requests.get(feed_url, headers=headers, timeout=15)
 
         if response.status_code != 200:
-            print(f"[Europe v1.0] Meduza: HTTP {response.status_code}")
+            print(f"[Europe v1.1] Meduza: HTTP {response.status_code}")
             return []
 
         root = ET.fromstring(response.content)
@@ -880,10 +986,10 @@ def fetch_meduza_rss():
                     'language': 'en'
                 })
 
-        print(f"[Europe v1.0] Meduza: ✓ Fetched {len(articles)} articles")
+        print(f"[Europe v1.1] Meduza: ✓ Fetched {len(articles)} articles")
 
     except Exception as e:
-        print(f"[Europe v1.0] Meduza error: {str(e)[:100]}")
+        print(f"[Europe v1.1] Meduza error: {str(e)[:100]}")
 
     return articles
 
@@ -894,14 +1000,14 @@ def fetch_isw_rss():
     feed_url = 'https://www.understandingwar.org/rss.xml'
 
     try:
-        print("[Europe v1.0] ISW: Fetching RSS...")
+        print("[Europe v1.1] ISW: Fetching RSS...")
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         response = requests.get(feed_url, headers=headers, timeout=15)
 
         if response.status_code != 200:
-            print(f"[Europe v1.0] ISW: HTTP {response.status_code}")
+            print(f"[Europe v1.1] ISW: HTTP {response.status_code}")
             return []
 
         root = ET.fromstring(response.content)
@@ -929,10 +1035,10 @@ def fetch_isw_rss():
                     'language': 'en'
                 })
 
-        print(f"[Europe v1.0] ISW: ✓ Fetched {len(articles)} articles")
+        print(f"[Europe v1.1] ISW: ✓ Fetched {len(articles)} articles")
 
     except Exception as e:
-        print(f"[Europe v1.0] ISW error: {str(e)[:100]}")
+        print(f"[Europe v1.1] ISW error: {str(e)[:100]}")
 
     return articles
 
@@ -943,14 +1049,14 @@ def fetch_arctic_today_rss():
     feed_url = 'https://www.arctictoday.com/feed/'
 
     try:
-        print("[Europe v1.0] Arctic Today: Fetching RSS...")
+        print("[Europe v1.1] Arctic Today: Fetching RSS...")
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         response = requests.get(feed_url, headers=headers, timeout=15)
 
         if response.status_code != 200:
-            print(f"[Europe v1.0] Arctic Today: HTTP {response.status_code}")
+            print(f"[Europe v1.1] Arctic Today: HTTP {response.status_code}")
             return []
 
         root = ET.fromstring(response.content)
@@ -978,10 +1084,10 @@ def fetch_arctic_today_rss():
                     'language': 'en'
                 })
 
-        print(f"[Europe v1.0] Arctic Today: ✓ Fetched {len(articles)} articles")
+        print(f"[Europe v1.1] Arctic Today: ✓ Fetched {len(articles)} articles")
 
     except Exception as e:
-        print(f"[Europe v1.0] Arctic Today error: {str(e)[:100]}")
+        print(f"[Europe v1.1] Arctic Today error: {str(e)[:100]}")
 
     return articles
 
@@ -994,19 +1100,19 @@ CASUALTY_KEYWORDS = {
         'killed', 'dead', 'died', 'death toll', 'fatalities', 'deaths',
         'shot dead', 'killed by', 'killed in',
         'people have died', 'people have been killed',
-        'убит', 'погиб', 'смерть',  # Russian
-        'загинув', 'загиблі', 'смерть'  # Ukrainian
+        'убит', 'погиб', 'смерть',
+        'загинув', 'загиблі', 'смерть'
     ],
     'injuries': [
         'injured', 'wounded', 'hurt', 'injuries', 'casualties',
         'hospitalized', 'critical condition', 'serious injuries',
-        'ранен', 'поранен'  # Russian/Ukrainian
+        'ранен', 'поранен'
     ],
     'arrests': [
         'arrested', 'detained', 'detention', 'arrest', 'arrests',
         'taken into custody', 'custody', 'apprehended',
         'imprisoned', 'prisoner of war', 'POW',
-        'задержан', 'арестован'  # Russian
+        'задержан', 'арестован'
     ]
 }
 
@@ -1030,13 +1136,11 @@ def parse_number_word(num_str):
         if any(word in num_str for word in ['several', 'few', 'many']):
             return 200
         return 100
-
     elif 'thousand' in num_str or 'thousands' in num_str:
         match = re.search(r'(\d+)\s*thousand', num_str)
         if match:
             return int(match.group(1)) * 1000
         return 1000
-
     elif 'dozen' in num_str or 'dozens' in num_str:
         return 12
 
@@ -1094,9 +1198,9 @@ def extract_casualty_data(articles):
 
     casualties['sources'] = list(casualties['sources'])
 
-    print(f"[Europe v1.0] ✓ Deaths: {casualties['deaths']} detected")
-    print(f"[Europe v1.0] ✓ Injuries: {casualties['injuries']} detected")
-    print(f"[Europe v1.0] ✓ Arrests/POWs: {casualties['arrests']} detected")
+    print(f"[Europe v1.1] ✓ Deaths: {casualties['deaths']} detected")
+    print(f"[Europe v1.1] ✓ Injuries: {casualties['injuries']} detected")
+    print(f"[Europe v1.1] ✓ Arrests/POWs: {casualties['arrests']} detected")
 
     return casualties
 
@@ -1105,21 +1209,16 @@ def extract_casualty_data(articles):
 # NOTAM SCANNING
 # ========================================
 def fetch_notams_for_region(region_key):
-    """
-    Fetch NOTAMs for a European region using news-based NOTAM detection.
-    Scans GDELT and NewsAPI for NOTAM-related alerts.
-    """
+    """Fetch NOTAMs for a European region using news-based NOTAM detection."""
     region = NOTAM_REGIONS.get(region_key)
     if not region:
         return []
 
     notams = []
 
-    # Build search query from ICAO codes and region
     icao_query = ' OR '.join(region['icao_codes'][:3])
     display_name = region['display_name']
 
-    # Search GDELT for NOTAM-related news (broad patterns)
     try:
         notam_query = (
             f"({display_name} NOTAM) OR ({display_name} airspace) OR ({icao_query} airspace) OR "
@@ -1148,7 +1247,6 @@ def fetch_notams_for_region(region_key):
                 url = article.get('url', '')
                 seen_date = article.get('seendate', '')
 
-                # Check if article matches critical NOTAM patterns
                 notam_type = classify_notam(title)
                 if notam_type:
                     notams.append({
@@ -1166,9 +1264,9 @@ def fetch_notams_for_region(region_key):
                     })
 
     except Exception as e:
-        print(f"[Europe v1.0] NOTAM scan error for {region_key}: {e}")
+        print(f"[Europe v1.1] NOTAM scan error for {region_key}: {e}")
 
-    print(f"[Europe v1.0] NOTAMs for {display_name}: Found {len(notams)} alerts")
+    print(f"[Europe v1.1] NOTAMs for {display_name}: Found {len(notams)} alerts")
     return notams
 
 
@@ -1176,31 +1274,18 @@ def classify_notam(text):
     """Classify a NOTAM by severity type"""
     text_upper = text.upper() if text else ''
 
-    # Military / conflict zone
     if any(kw in text_upper for kw in ['CONFLICT ZONE', 'WAR ZONE', 'HOSTILE', 'ANTI-AIRCRAFT', 'SAM ']):
         return {'type': 'Conflict Zone', 'color': 'red'}
-
-    # Airspace closure
     if any(kw in text_upper for kw in ['AIRSPACE CLOSED', 'NO-FLY', 'NO FLY', 'PROHIBITED']):
         return {'type': 'Airspace Closure', 'color': 'red'}
-
-    # Military exercise
     if any(kw in text_upper for kw in ['MILITARY EXERCISE', 'MIL EXERCISE', 'LIVE FIRING', 'MISSILE LAUNCH', 'MISSILE TEST']):
         return {'type': 'Military Exercise', 'color': 'orange'}
-
-    # GPS/navigation interference
     if any(kw in text_upper for kw in ['GPS JAMMING', 'GPS INTERFERENCE', 'GPS SPOOFING', 'NAVIGATION WARNING', 'NAVIGATION UNRELIABLE']):
         return {'type': 'GPS Interference', 'color': 'yellow'}
-
-    # Drone/UAS activity
     if any(kw in text_upper for kw in ['DRONE', 'UAV', 'UAS', 'UNMANNED']):
         return {'type': 'Drone Activity', 'color': 'orange'}
-
-    # Restricted area
     if any(kw in text_upper for kw in ['RESTRICTED', 'DANGER AREA', 'TEMPORARY RESTRICTION']):
         return {'type': 'Restricted Area', 'color': 'yellow'}
-
-    # General NOTAM mention
     if 'NOTAM' in text_upper or 'AIRSPACE' in text_upper:
         return {'type': 'Airspace Notice', 'color': 'blue'}
 
@@ -1216,9 +1301,8 @@ def scan_all_europe_notams():
             notams = fetch_notams_for_region(region_key)
             all_notams.extend(notams)
         except Exception as e:
-            print(f"[Europe v1.0] NOTAM scan failed for {region_key}: {e}")
+            print(f"[Europe v1.1] NOTAM scan failed for {region_key}: {e}")
 
-    # Sort by severity
     severity_order = {'red': 0, 'orange': 1, 'yellow': 2, 'purple': 3, 'blue': 4, 'gray': 5}
     all_notams.sort(key=lambda x: severity_order.get(x.get('type_color', 'gray'), 5))
 
@@ -1259,7 +1343,6 @@ def scan_european_flight_disruptions(all_articles):
         'flights affected', 'routes affected'
     ]
 
-    # Generic flight disruption patterns (no specific airline needed)
     generic_flight_patterns = [
         'flights to', 'flights from', 'flights over',
         'all flights', 'commercial flights', 'civilian flights',
@@ -1277,7 +1360,6 @@ def scan_european_flight_disruptions(all_articles):
         matched_airline = None
         matched_keyword = None
 
-        # First pass: check for specific airline + disruption keyword
         for airline in european_airlines:
             if airline.lower() in text:
                 for keyword in flight_keywords:
@@ -1288,11 +1370,9 @@ def scan_european_flight_disruptions(all_articles):
                 if matched_airline:
                     break
 
-        # Second pass: check for generic flight disruption (no airline name needed)
         if not matched_airline:
             has_flight_context = any(pattern in text for pattern in generic_flight_patterns)
             has_disruption = any(keyword in text for keyword in flight_keywords)
-            # Must also mention a European location to stay relevant
             has_europe_context = any(loc.lower() in text for loc in [
                 'ukraine', 'russia', 'poland', 'baltic', 'europe', 'european',
                 'greenland', 'denmark', 'moldova', 'romania', 'belarus',
@@ -1317,7 +1397,6 @@ def scan_european_flight_disruptions(all_articles):
                 'title': article.get('title', '')
             })
 
-    # Deduplicate by airline + destination
     seen = set()
     unique = []
     for d in disruptions:
@@ -1326,7 +1405,7 @@ def scan_european_flight_disruptions(all_articles):
             seen.add(key)
             unique.append(d)
 
-    print(f"[Europe v1.0] Flight disruptions detected: {len(unique)}")
+    print(f"[Europe v1.1] Flight disruptions detected: {len(unique)}")
     return unique
 
 
@@ -1366,14 +1445,252 @@ def extract_disruption_reason(text):
 
 
 # ========================================
+# INTERNAL SCAN FUNCTIONS (used by both
+# API endpoints and background refresh)
+# ========================================
+def _run_threat_scan(target, days=7):
+    """
+    Run a full threat scan for a target. Returns the complete response dict.
+    Used by both the API endpoint and the background refresh thread.
+    """
+    query = ' OR '.join(TARGET_KEYWORDS[target]['keywords'][:8])
+
+    # Fetch from all sources
+    articles_en = fetch_newsapi_articles(query, days)
+    articles_gdelt_en = fetch_gdelt_articles(query, days, 'eng')
+    articles_gdelt_ru = fetch_gdelt_articles(query, days, 'rus')
+    articles_gdelt_fr = fetch_gdelt_articles(query, days, 'fra')
+    articles_gdelt_uk = []
+
+    if target in ('ukraine', 'russia'):
+        articles_gdelt_uk = fetch_gdelt_articles(query, days, 'ukr')
+
+    articles_reddit = fetch_reddit_posts(
+        target,
+        TARGET_KEYWORDS[target]['reddit_keywords'],
+        days
+    )
+
+    # Fetch target-specific RSS
+    rss_articles = []
+    if target in ('ukraine', 'russia'):
+        try:
+            rss_articles.extend(fetch_kyiv_independent_rss())
+        except Exception as e:
+            print(f"Kyiv Independent RSS error: {e}")
+        try:
+            rss_articles.extend(fetch_meduza_rss())
+        except Exception as e:
+            print(f"Meduza RSS error: {e}")
+        try:
+            rss_articles.extend(fetch_isw_rss())
+        except Exception as e:
+            print(f"ISW RSS error: {e}")
+
+    if target == 'greenland':
+        try:
+            rss_articles.extend(fetch_arctic_today_rss())
+        except Exception as e:
+            print(f"Arctic Today RSS error: {e}")
+
+    all_articles = (articles_en + articles_gdelt_en + articles_gdelt_ru +
+                   articles_gdelt_fr + articles_gdelt_uk + articles_reddit +
+                   rss_articles)
+
+    # Score
+    scoring_result = calculate_threat_probability(all_articles, days, target)
+    probability = scoring_result['probability']
+    momentum = scoring_result['momentum']
+    breakdown = scoring_result['breakdown']
+
+    # Timeline
+    if probability < 30:
+        timeline = "180+ Days (Low priority)"
+    elif probability < 50:
+        timeline = "91-180 Days"
+    elif probability < 70:
+        timeline = "31-90 Days"
+    else:
+        timeline = "0-30 Days (Elevated threat)"
+
+    if momentum == 'increasing' and probability > 50:
+        timeline = "0-30 Days (Elevated threat)"
+
+    # Confidence
+    unique_sources = len(set(a.get('source', {}).get('name', 'Unknown') for a in all_articles))
+    if len(all_articles) >= 20 and unique_sources >= 8:
+        confidence = "High"
+    elif len(all_articles) >= 10 and unique_sources >= 5:
+        confidence = "Medium"
+    else:
+        confidence = "Low"
+
+    # Top articles
+    top_articles = []
+    top_contributors = scoring_result.get('top_contributors', [])
+
+    for contributor in top_contributors:
+        matching_article = None
+        for article in all_articles:
+            if article.get('source', {}).get('name', '') == contributor['source']:
+                matching_article = article
+                break
+
+        if matching_article:
+            top_articles.append({
+                'title': matching_article.get('title', 'No title'),
+                'source': contributor['source'],
+                'url': matching_article.get('url', ''),
+                'publishedAt': matching_article.get('publishedAt', ''),
+                'contribution': contributor['contribution'],
+                'contribution_percent': abs(contributor['contribution']) / max(abs(breakdown['weighted_score']), 1) * 100,
+                'severity': contributor['severity'],
+                'source_weight': contributor['source_weight'],
+                'time_decay': contributor['time_decay'],
+                'deescalation': contributor['deescalation']
+            })
+
+    # Casualty data for Ukraine/Russia
+    casualties = None
+    if target in ('ukraine', 'russia'):
+        try:
+            casualties = extract_casualty_data(all_articles)
+        except Exception as e:
+            print(f"Casualty extraction error: {e}")
+
+    # Flight disruptions
+    flight_disruptions = []
+    try:
+        flight_disruptions = scan_european_flight_disruptions(all_articles)
+    except Exception as e:
+        print(f"Flight disruption scan error: {e}")
+
+    response_data = {
+        'success': True,
+        'target': target,
+        'region': 'europe',
+        'probability': probability,
+        'timeline': timeline,
+        'confidence': confidence,
+        'momentum': momentum,
+        'total_articles': len(all_articles),
+        'recent_articles_48h': breakdown.get('recent_articles_48h', 0),
+        'older_articles': breakdown.get('older_articles', 0),
+        'deescalation_count': breakdown.get('deescalation_count', 0),
+        'scoring_breakdown': breakdown,
+        'top_scoring_articles': top_articles,
+        'escalation_keywords': ESCALATION_KEYWORDS,
+        'target_keywords': TARGET_KEYWORDS[target]['keywords'],
+        'flight_disruptions': flight_disruptions,
+        'articles_en': [a for a in all_articles if a.get('language') == 'en'][:20],
+        'articles_ru': [a for a in all_articles if a.get('language') == 'ru'][:20],
+        'articles_fr': [a for a in all_articles if a.get('language') == 'fr'][:20],
+        'articles_uk': [a for a in all_articles if a.get('language') == 'uk'][:20],
+        'articles_reddit': [a for a in all_articles if a.get('source', {}).get('name', '').startswith('r/')][:20],
+        'version': '1.1.0-europe'
+    }
+
+    if casualties:
+        response_data['casualties'] = {
+            'deaths': casualties['deaths'],
+            'injuries': casualties['injuries'],
+            'arrests_pows': casualties['arrests'],
+            'verified_sources': casualties['sources'],
+            'details': casualties.get('details', [])
+        }
+
+    return response_data
+
+
+def _run_notam_scan():
+    """Run a full NOTAM scan. Returns the complete response dict."""
+    notams = scan_all_europe_notams()
+
+    return {
+        'success': True,
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'total_notams': len(notams),
+        'notams': notams,
+        'regions_scanned': list(NOTAM_REGIONS.keys()),
+        'version': '1.1.0-europe'
+    }
+
+
+def _run_flight_scan():
+    """Run a full flight disruption scan. Returns the complete response dict."""
+    flight_queries = [
+        'Europe flight cancelled OR suspended OR grounded OR diverted',
+        'airline cancel flights Ukraine OR Russia OR Poland OR Baltic',
+        'airspace closed Europe OR Ukraine OR Russia OR Poland OR Baltic',
+        'NOTAM airspace restriction Europe',
+        'Ryanair OR Lufthansa OR Wizz Air cancel OR suspend flights',
+        'flight disruption war zone Europe',
+        'aviation safety Europe conflict'
+    ]
+
+    all_articles = []
+    for fq in flight_queries:
+        try:
+            all_articles.extend(fetch_newsapi_articles(fq, days=3))
+        except Exception as e:
+            print(f"[Europe v1.1] Flight query error: {e}")
+        try:
+            all_articles.extend(fetch_gdelt_articles(fq, days=3, language='eng'))
+        except Exception as e:
+            print(f"[Europe v1.1] Flight GDELT query error: {e}")
+
+    # Deduplicate by URL
+    seen_urls = set()
+    unique_articles = []
+    for a in all_articles:
+        url = a.get('url', '')
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            unique_articles.append(a)
+
+    disruptions = scan_european_flight_disruptions(unique_articles)
+
+    return {
+        'success': True,
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'total_disruptions': len(disruptions),
+        'cancellations': disruptions,
+        'version': '1.1.0-europe'
+    }
+
+
+# ========================================
 # API ENDPOINTS
 # ========================================
 @app.route('/api/europe/threat/<target>', methods=['GET'])
 def api_europe_threat(target):
-    """Main threat assessment endpoint for European targets"""
+    """
+    Main threat assessment endpoint for European targets.
+    Returns cached data by default. Pass ?force=true to trigger a fresh OSINT scan.
+    """
     try:
+        force = request.args.get('force', 'false').lower() == 'true'
         days = int(request.args.get('days', 7))
 
+        if target not in TARGET_KEYWORDS:
+            return jsonify({
+                'success': False,
+                'error': f"Invalid target. Must be one of: {', '.join(TARGET_KEYWORDS.keys())}"
+            }), 400
+
+        cache_key = f'threat_{target}'
+
+        # Return cached data if available and not forced
+        if not force:
+            cached = cache_get(cache_key)
+            if cached:
+                cached['cached'] = True
+                age = cache_age(cache_key)
+                cached['cache_age_seconds'] = int(age) if age else 0
+                cached['cache_age_human'] = f"{int(age / 60)}m ago" if age else 'unknown'
+                return jsonify(cached)
+
+        # Fresh scan required — check rate limit
         if not check_rate_limit():
             return jsonify({
                 'success': False,
@@ -1384,158 +1701,14 @@ def api_europe_threat(target):
                 'rate_limited': True
             }), 200
 
-        if target not in TARGET_KEYWORDS:
-            return jsonify({
-                'success': False,
-                'error': f"Invalid target. Must be one of: {', '.join(TARGET_KEYWORDS.keys())}"
-            }), 400
+        # Run fresh scan
+        response_data = _run_threat_scan(target, days)
+        response_data['cached'] = False
+        response_data['cache_age_seconds'] = 0
+        response_data['cache_age_human'] = 'fresh scan'
 
-        query = ' OR '.join(TARGET_KEYWORDS[target]['keywords'][:8])  # Limit query length
-
-        # Fetch from all sources
-        articles_en = fetch_newsapi_articles(query, days)
-        articles_gdelt_en = fetch_gdelt_articles(query, days, 'eng')
-        articles_gdelt_ru = fetch_gdelt_articles(query, days, 'rus')
-        articles_gdelt_fr = fetch_gdelt_articles(query, days, 'fra')
-        articles_gdelt_uk = []
-
-        if target in ('ukraine', 'russia'):
-            articles_gdelt_uk = fetch_gdelt_articles(query, days, 'ukr')
-
-        articles_reddit = fetch_reddit_posts(
-            target,
-            TARGET_KEYWORDS[target]['reddit_keywords'],
-            days
-        )
-
-        # Fetch target-specific RSS
-        rss_articles = []
-        if target in ('ukraine', 'russia'):
-            try:
-                rss_articles.extend(fetch_kyiv_independent_rss())
-            except Exception as e:
-                print(f"Kyiv Independent RSS error: {e}")
-            try:
-                rss_articles.extend(fetch_meduza_rss())
-            except Exception as e:
-                print(f"Meduza RSS error: {e}")
-            try:
-                rss_articles.extend(fetch_isw_rss())
-            except Exception as e:
-                print(f"ISW RSS error: {e}")
-
-        if target == 'greenland':
-            try:
-                rss_articles.extend(fetch_arctic_today_rss())
-            except Exception as e:
-                print(f"Arctic Today RSS error: {e}")
-
-        all_articles = (articles_en + articles_gdelt_en + articles_gdelt_ru +
-                       articles_gdelt_fr + articles_gdelt_uk + articles_reddit +
-                       rss_articles)
-
-        # Score
-        scoring_result = calculate_threat_probability(all_articles, days, target)
-        probability = scoring_result['probability']
-        momentum = scoring_result['momentum']
-        breakdown = scoring_result['breakdown']
-
-        # Timeline
-        if probability < 30:
-            timeline = "180+ Days (Low priority)"
-        elif probability < 50:
-            timeline = "91-180 Days"
-        elif probability < 70:
-            timeline = "31-90 Days"
-        else:
-            timeline = "0-30 Days (Elevated threat)"
-
-        if momentum == 'increasing' and probability > 50:
-            timeline = "0-30 Days (Elevated threat)"
-
-        # Confidence
-        unique_sources = len(set(a.get('source', {}).get('name', 'Unknown') for a in all_articles))
-        if len(all_articles) >= 20 and unique_sources >= 8:
-            confidence = "High"
-        elif len(all_articles) >= 10 and unique_sources >= 5:
-            confidence = "Medium"
-        else:
-            confidence = "Low"
-
-        # Top articles
-        top_articles = []
-        top_contributors = scoring_result.get('top_contributors', [])
-
-        for contributor in top_contributors:
-            matching_article = None
-            for article in all_articles:
-                if article.get('source', {}).get('name', '') == contributor['source']:
-                    matching_article = article
-                    break
-
-            if matching_article:
-                top_articles.append({
-                    'title': matching_article.get('title', 'No title'),
-                    'source': contributor['source'],
-                    'url': matching_article.get('url', ''),
-                    'publishedAt': matching_article.get('publishedAt', ''),
-                    'contribution': contributor['contribution'],
-                    'contribution_percent': abs(contributor['contribution']) / max(abs(breakdown['weighted_score']), 1) * 100,
-                    'severity': contributor['severity'],
-                    'source_weight': contributor['source_weight'],
-                    'time_decay': contributor['time_decay'],
-                    'deescalation': contributor['deescalation']
-                })
-
-        # Casualty data for Ukraine/Russia
-        casualties = None
-        if target in ('ukraine', 'russia'):
-            try:
-                casualties = extract_casualty_data(all_articles)
-            except Exception as e:
-                print(f"Casualty extraction error: {e}")
-
-        # Flight disruptions
-        flight_disruptions = []
-        try:
-            flight_disruptions = scan_european_flight_disruptions(all_articles)
-        except Exception as e:
-            print(f"Flight disruption scan error: {e}")
-
-        response_data = {
-            'success': True,
-            'target': target,
-            'region': 'europe',
-            'probability': probability,
-            'timeline': timeline,
-            'confidence': confidence,
-            'momentum': momentum,
-            'total_articles': len(all_articles),
-            'recent_articles_48h': breakdown.get('recent_articles_48h', 0),
-            'older_articles': breakdown.get('older_articles', 0),
-            'deescalation_count': breakdown.get('deescalation_count', 0),
-            'scoring_breakdown': breakdown,
-            'top_scoring_articles': top_articles,
-            'escalation_keywords': ESCALATION_KEYWORDS,
-            'target_keywords': TARGET_KEYWORDS[target]['keywords'],
-            'flight_disruptions': flight_disruptions,
-            'articles_en': [a for a in all_articles if a.get('language') == 'en'][:20],
-            'articles_ru': [a for a in all_articles if a.get('language') == 'ru'][:20],
-            'articles_fr': [a for a in all_articles if a.get('language') == 'fr'][:20],
-            'articles_uk': [a for a in all_articles if a.get('language') == 'uk'][:20],
-            'articles_reddit': [a for a in all_articles if a.get('source', {}).get('name', '').startswith('r/')][:20],
-            'cached': False,
-            'version': '1.0.0-europe'
-        }
-
-        if casualties:
-            response_data['casualties'] = {
-                'deaths': casualties['deaths'],
-                'injuries': casualties['injuries'],
-                'arrests_pows': casualties['arrests'],
-                'verified_sources': casualties['sources'],
-                'details': casualties.get('details', [])
-            }
+        # Store in cache
+        cache_set(cache_key, response_data)
 
         return jsonify(response_data)
 
@@ -1552,26 +1725,105 @@ def api_europe_threat(target):
         }), 500
 
 
+@app.route('/api/europe/dashboard', methods=['GET'])
+def api_europe_dashboard():
+    """
+    Single batch endpoint — returns all 4 country scores in one response.
+    Dramatically reduces frontend round trips from 4 to 1.
+    Returns cached data by default. Pass ?force=true to trigger fresh scans.
+    """
+    try:
+        force = request.args.get('force', 'false').lower() == 'true'
+        targets = list(TARGET_KEYWORDS.keys())
+
+        dashboard = {
+            'success': True,
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'version': '1.1.0-europe',
+            'countries': {}
+        }
+
+        all_cached = True
+
+        for target in targets:
+            cache_key = f'threat_{target}'
+
+            if not force:
+                cached = cache_get(cache_key)
+                if cached:
+                    # Return collapsed summary for dashboard
+                    dashboard['countries'][target] = {
+                        'probability': cached.get('probability', 0),
+                        'momentum': cached.get('momentum', 'stable'),
+                        'timeline': cached.get('timeline', 'Unknown'),
+                        'confidence': cached.get('confidence', 'Low'),
+                        'total_articles': cached.get('total_articles', 0),
+                        'flight_disruptions': len(cached.get('flight_disruptions', [])),
+                        'cached': True,
+                        'cache_age_seconds': int(cache_age(cache_key) or 0)
+                    }
+                    continue
+
+            # Cache miss — run fresh scan
+            all_cached = False
+            if not check_rate_limit():
+                dashboard['countries'][target] = {
+                    'probability': 0,
+                    'error': 'Rate limited',
+                    'cached': False
+                }
+                continue
+
+            data = _run_threat_scan(target, days=7)
+            cache_set(cache_key, data)
+
+            dashboard['countries'][target] = {
+                'probability': data.get('probability', 0),
+                'momentum': data.get('momentum', 'stable'),
+                'timeline': data.get('timeline', 'Unknown'),
+                'confidence': data.get('confidence', 'Low'),
+                'total_articles': data.get('total_articles', 0),
+                'flight_disruptions': len(data.get('flight_disruptions', [])),
+                'cached': False,
+                'cache_age_seconds': 0
+            }
+
+        dashboard['all_cached'] = all_cached
+
+        return jsonify(dashboard)
+
+    except Exception as e:
+        print(f"Error in /api/europe/dashboard: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/europe/notams', methods=['GET'])
 def api_europe_notams():
-    """European NOTAMs endpoint"""
+    """European NOTAMs endpoint. Cached with ?force=true override."""
     try:
+        force = request.args.get('force', 'false').lower() == 'true'
+
+        if not force:
+            cached = cache_get('notams')
+            if cached:
+                cached['cached'] = True
+                cached['cache_age_seconds'] = int(cache_age('notams') or 0)
+                return jsonify(cached)
+
         if not check_rate_limit():
             return jsonify({
                 'error': 'Rate limit exceeded',
                 'rate_limit': get_rate_limit_info()
             }), 429
 
-        notams = scan_all_europe_notams()
+        data = _run_notam_scan()
+        data['cached'] = False
+        cache_set('notams', data)
 
-        return jsonify({
-            'success': True,
-            'timestamp': datetime.now(timezone.utc).isoformat(),
-            'total_notams': len(notams),
-            'notams': notams,
-            'regions_scanned': list(NOTAM_REGIONS.keys()),
-            'version': '1.0.0-europe'
-        })
+        return jsonify(data)
 
     except Exception as e:
         print(f"Error in /api/europe/notams: {e}")
@@ -1584,54 +1836,28 @@ def api_europe_notams():
 
 @app.route('/api/europe/flights', methods=['GET'])
 def api_europe_flights():
-    """European flight disruptions endpoint"""
+    """European flight disruptions endpoint. Cached with ?force=true override."""
     try:
+        force = request.args.get('force', 'false').lower() == 'true'
+
+        if not force:
+            cached = cache_get('flights')
+            if cached:
+                cached['cached'] = True
+                cached['cache_age_seconds'] = int(cache_age('flights') or 0)
+                return jsonify(cached)
+
         if not check_rate_limit():
             return jsonify({
                 'error': 'Rate limit exceeded',
                 'rate_limit': get_rate_limit_info()
             }), 429
 
-        # Multi-query scan for flight disruptions across Europe
-        flight_queries = [
-            'Europe flight cancelled OR suspended OR grounded OR diverted',
-            'airline cancel flights Ukraine OR Russia OR Poland OR Baltic',
-            'airspace closed Europe OR Ukraine OR Russia OR Poland OR Baltic',
-            'NOTAM airspace restriction Europe',
-            'Ryanair OR Lufthansa OR Wizz Air cancel OR suspend flights',
-            'flight disruption war zone Europe',
-            'aviation safety Europe conflict'
-        ]
+        data = _run_flight_scan()
+        data['cached'] = False
+        cache_set('flights', data)
 
-        all_articles = []
-        for fq in flight_queries:
-            try:
-                all_articles.extend(fetch_newsapi_articles(fq, days=3))
-            except Exception as e:
-                print(f"[Europe v1.0] Flight query error: {e}")
-            try:
-                all_articles.extend(fetch_gdelt_articles(fq, days=3, language='eng'))
-            except Exception as e:
-                print(f"[Europe v1.0] Flight GDELT query error: {e}")
-
-        # Deduplicate by URL
-        seen_urls = set()
-        unique_articles = []
-        for a in all_articles:
-            url = a.get('url', '')
-            if url and url not in seen_urls:
-                seen_urls.add(url)
-                unique_articles.append(a)
-
-        disruptions = scan_european_flight_disruptions(unique_articles)
-
-        return jsonify({
-            'success': True,
-            'timestamp': datetime.now(timezone.utc).isoformat(),
-            'total_disruptions': len(disruptions),
-            'cancellations': disruptions,
-            'version': '1.0.0-europe'
-        })
+        return jsonify(data)
 
     except Exception as e:
         print(f"Error in /api/europe/flights: {e}")
@@ -1640,6 +1866,39 @@ def api_europe_flights():
             'error': str(e),
             'cancellations': []
         }), 500
+
+
+@app.route('/api/europe/cache-status', methods=['GET'])
+def api_cache_status():
+    """
+    Diagnostic endpoint — shows what's in cache and how old it is.
+    Useful for debugging and monitoring.
+    """
+    status = {}
+    targets = list(TARGET_KEYWORDS.keys())
+
+    for target in targets:
+        age = cache_age(f'threat_{target}')
+        status[target] = {
+            'cached': age is not None,
+            'age_seconds': int(age) if age else None,
+            'age_human': f"{int(age / 60)}m ago" if age else 'empty',
+            'fresh': age is not None and age < CACHE_TTL
+        }
+
+    for key in ['notams', 'flights']:
+        age = cache_age(key)
+        status[key] = {
+            'cached': age is not None,
+            'age_seconds': int(age) if age else None,
+            'age_human': f"{int(age / 60)}m ago" if age else 'empty',
+            'fresh': age is not None and age < CACHE_TTL
+        }
+
+    status['cache_ttl_seconds'] = CACHE_TTL
+    status['cache_ttl_human'] = f"{CACHE_TTL / 3600:.0f} hours"
+
+    return jsonify(status)
 
 
 @app.route('/rate-limit', methods=['GET'])
@@ -1653,14 +1912,22 @@ def home():
     """Root endpoint"""
     return jsonify({
         'status': 'Backend is running',
-        'message': 'Asifah Analytics — Europe API',
-        'version': '1.0.0',
+        'message': 'Asifah Analytics — Europe API v1.1.0',
+        'version': '1.1.0',
         'region': 'europe',
+        'features': [
+            'In-memory response caching (4-hour TTL)',
+            'Background refresh thread (auto-refreshes all caches)',
+            'Single dashboard endpoint (/api/europe/dashboard)',
+            'Force fresh scan with ?force=true'
+        ],
         'targets': list(TARGET_KEYWORDS.keys()),
         'endpoints': {
-            '/api/europe/threat/<target>': 'Get threat assessment for greenland, ukraine, russia, or poland',
-            '/api/europe/notams': 'Get European NOTAMs',
-            '/api/europe/flights': 'Get European flight disruptions',
+            '/api/europe/threat/<target>': 'Get threat assessment (cached, ?force=true for fresh)',
+            '/api/europe/dashboard': 'Get all 4 country scores in one call (cached)',
+            '/api/europe/notams': 'Get European NOTAMs (cached, ?force=true for fresh)',
+            '/api/europe/flights': 'Get European flight disruptions (cached, ?force=true for fresh)',
+            '/api/europe/cache-status': 'See cache freshness for all endpoints',
             '/rate-limit': 'Get rate limit status',
             '/health': 'Health check'
         }
@@ -1672,10 +1939,19 @@ def health():
     """Health check endpoint"""
     return jsonify({
         'status': 'healthy',
-        'version': '1.0.0-europe',
+        'version': '1.1.0-europe',
         'region': 'europe',
-        'timestamp': datetime.now(timezone.utc).isoformat()
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'cache_entries': len(_cache)
     })
+
+
+# ========================================
+# START BACKGROUND REFRESH ON BOOT
+# ========================================
+# Start the background thread when the app boots.
+# On Render with gunicorn, this runs once per worker.
+start_background_refresh()
 
 
 if __name__ == '__main__':

@@ -1664,6 +1664,15 @@ def _run_flight_scan():
 # ========================================
 # API ENDPOINTS
 # ========================================
+
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
+    response.headers['Access-Control-Allow-Methods'] = 'GET,OPTIONS'
+    return response
+
+
 @app.route('/api/europe/threat/<target>', methods=['GET'])
 @cross_origin()
 def api_europe_threat(target):
@@ -1674,15 +1683,12 @@ def api_europe_threat(target):
     try:
         force = request.args.get('force', 'false').lower() == 'true'
         days = int(request.args.get('days', 7))
-
         if target not in TARGET_KEYWORDS:
             return jsonify({
                 'success': False,
                 'error': f"Invalid target. Must be one of: {', '.join(TARGET_KEYWORDS.keys())}"
             }), 400
-
         cache_key = f'threat_{target}_{days}d'
-
         # Return cached data if available and not forced
         if not force:
             cached = cache_get(cache_key)
@@ -1692,7 +1698,6 @@ def api_europe_threat(target):
                 cached['cache_age_seconds'] = int(age) if age else 0
                 cached['cache_age_human'] = f"{int(age / 60)}m ago" if age else 'unknown'
                 return jsonify(cached)
-
         # Fresh scan required — check rate limit
         if not check_rate_limit():
             return jsonify({
@@ -1703,18 +1708,14 @@ def api_europe_threat(target):
                 'confidence': 'Low',
                 'rate_limited': True
             }), 200
-
         # Run fresh scan
         response_data = _run_threat_scan(target, days)
         response_data['cached'] = False
         response_data['cache_age_seconds'] = 0
         response_data['cache_age_human'] = 'fresh scan'
-
         # Store in cache
         cache_set(cache_key, response_data)
-
         return jsonify(response_data)
-
     except Exception as e:
         print(f"Error in /api/europe/threat/{target}: {e}")
         import traceback
@@ -1726,7 +1727,6 @@ def api_europe_threat(target):
             'timeline': 'Unknown',
             'confidence': 'Low'
         }), 500
-
 
 @app.route('/api/europe/dashboard', methods=['GET'])
 def api_europe_dashboard():

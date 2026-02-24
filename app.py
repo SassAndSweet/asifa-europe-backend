@@ -37,7 +37,7 @@ import threading
 import json
 
 app = Flask(__name__)
-CORS(app)
+# CORS handled by after_request handler
 
 # ========================================
 # CONFIGURATION
@@ -1966,14 +1966,12 @@ def _run_flight_scan():
 @app.after_request
 def add_cors_headers(response):
     origin = request.headers.get('Origin', '*')
-    response.headers['Access-Control-Allow-Origin'] = origin
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
     response.headers['Access-Control-Allow-Methods'] = 'GET,OPTIONS'
     return response
 
 
 @app.route('/api/europe/threat/<target>', methods=['GET'])
-@cross_origin()
 def api_europe_threat(target):
     """
     Main threat assessment endpoint for European targets.
@@ -2138,7 +2136,6 @@ def api_europe_notams():
 
 
 @app.route('/api/europe/flights', methods=['GET'])
-@cross_origin()
 def api_europe_flights():
     """European flight disruptions endpoint. Cached with ?force=true override."""
     try:
@@ -2173,7 +2170,6 @@ def api_europe_flights():
         }), 500
 
 @app.route('/api/europe/travel-advisories', methods=['GET'])
-@cross_origin()
 def api_europe_travel_advisories():
     """U.S. State Dept Travel Advisories for European targets. Cached 24h."""
     try:

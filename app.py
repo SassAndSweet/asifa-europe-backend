@@ -250,6 +250,23 @@ SOURCE_WEIGHTS = {
 # KEYWORD SEVERITY
 # ========================================
 KEYWORD_SEVERITY = {
+    'active_war': {
+        'keywords': [
+            'intercepts ballistic missile', 'intercepts missile',
+            'shoots down drone', 'shoots down missile',
+            'base hit by missile', 'base struck by missile',
+            'base attacked', 'embassy hit', 'embassy struck',
+            'embassy attacked', 'port struck', 'port attacked',
+            'air defense activated', 'air defense fires',
+            'scrambles jets', 'jets scrambled',
+            'invokes article 5', 'article 5 invoked',
+            'operation epic fury', 'regime change operation',
+            'ballistic missile intercepted over',
+            'iranian missile hits', 'iranian drone hits',
+            'iran strikes', 'iran attacks',
+        ],
+        'multiplier': 3.0
+    },
     'diplomatic_crisis': {
         'keywords': [
             'ordered departure', 'authorized departure',
@@ -393,8 +410,8 @@ TARGET_BASELINES = {
         'description': 'NATO frontline state; recent Russian drone incursions; Belarus border tensions'
     },
     'turkey': {
-        'base_adjustment': +8,
-        'description': 'NATO member; Incirlik base targeted; Iran border tensions; Syria operations'
+        'base_adjustment': +12,
+        'description': 'NATO member; Incirlik base targeted; actively intercepting Iranian missiles; Iran border tensions'
     },
     'cyprus': {
         'base_adjustment': +10,
@@ -496,12 +513,31 @@ TARGET_KEYWORDS = {
             'turkish navy mediterranean', 'turkish naval exercise',
             'turkey earthquake', 'turkey refugees',
             'turkey election', 'turkey economy',
-            'turkey greece tensions', 'aegean dispute'
+            'turkey greece tensions', 'aegean dispute',
+            # Active war keywords (v1.2.0)
+            'turkey intercepts missile', 'turkey intercepts ballistic',
+            'turkey shoots down drone', 'turkey shoots down missile',
+            'turkish intercept iran', 'turkey missile intercept',
+            'incirlik high alert', 'incirlik closed', 'incirlik attacked',
+            'incirlik strike', 'incirlik hit', 'incirlik drone',
+            'iran strikes turkey', 'iran attacks turkey', 'iran missile turkey',
+            'iranian missile hits turkey', 'iranian drone turkey',
+            'turkey scrambles jets', 'turkish jets scramble',
+            'turkey activates air defense', 'turkey air defense alert',
+            'turkey nato article 5', 'turkey invokes article 5',
+            'article 5 turkey', 'nato defends turkey',
+            'debris falls turkey', 'shrapnel turkey', 'fragments turkey',
+            'missile intercepted over turkey', 'ballistic missile turkey',
+            'ankara shelter', 'istanbul shelter', 'ankara attack',
+            'istanbul attack', 'turkey casualties', 'turkey killed',
+            'turkish airspace closed', 'turkey flights cancelled',
+            'turkey war iran', 'iran war turkey'
         ],
         'reddit_keywords': [
             'Turkey', 'Erdogan', 'Ankara', 'Istanbul', 'NATO',
             'Incirlik', 'Turkish military', 'Syria', 'Iran',
-            'Article 5', 'Bayraktar', 'airspace', 'Mediterranean'
+            'Article 5', 'Bayraktar', 'airspace', 'Mediterranean',
+            'intercept', 'missile', 'drone', 'attack', 'war'
         ]
     },
     'cyprus': {
@@ -526,12 +562,31 @@ TARGET_KEYWORDS = {
             'cyprus war', 'cyprus conflict',
             'cyprus turkey tensions', 'northern cyprus',
             'cyprus division', 'cyprus buffer zone', 'unficyp',
-            'cyprus gas', 'cyprus energy', 'east med gas'
+            'cyprus gas', 'cyprus energy', 'east med gas',
+            # Active war keywords (v1.2.0)
+            'akrotiri hit', 'akrotiri struck', 'akrotiri attacked',
+            'akrotiri drone hit', 'akrotiri missile',
+            'iran strikes akrotiri', 'iranian drone akrotiri',
+            'iranian drone hits cyprus', 'iran attacks cyprus',
+            'cyprus airspace closed', 'cyprus flights grounded',
+            'cyprus flights cancelled', 'larnaca airport closed',
+            'paphos airport closed', 'nicosia shelter',
+            'limassol attack', 'larnaca attack',
+            'uk reinforces cyprus', 'uk deploys cyprus',
+            'british troops cyprus', 'royal air force cyprus',
+            'greece reinforces cyprus', 'greek jets cyprus',
+            'greek f-16 cyprus', 'greece intercepts drone',
+            'debris cyprus', 'shrapnel cyprus', 'fragments cyprus',
+            'cyprus casualties', 'cyprus killed',
+            'sovereign base areas attack', 'dhekelia attack',
+            'cyprus war', 'cyprus conflict iran',
+            'eastern mediterranean war', 'east med conflict'
         ],
         'reddit_keywords': [
             'Cyprus', 'Akrotiri', 'RAF', 'UK base', 'Iran drone',
             'evacuation', 'Nicosia', 'Limassol', 'NATO',
-            'British forces', 'Mediterranean', 'Turkey Cyprus'
+            'British forces', 'Mediterranean', 'Turkey Cyprus',
+            'intercept', 'drone', 'attack', 'missile', 'Greek F-16'
         ]
     }
 }
@@ -582,7 +637,20 @@ ESCALATION_KEYWORDS = [
     'finnair suspend', 'finnair cancel',
     'norwegian air suspend', 'norwegian air cancel',
     'border incident', 'border violation', 'hybrid attack',
-    'cyber attack', 'sabotage', 'disinformation'
+    'cyber attack', 'sabotage', 'disinformation',
+    # Active war escalation (v1.2.0)
+    'intercepts missile', 'intercepts ballistic missile',
+    'intercepts drone', 'shoots down drone', 'shoots down missile',
+    'air defense activated', 'air defense fires',
+    'base attacked', 'base hit', 'base struck',
+    'embassy hit', 'embassy attacked', 'embassy struck',
+    'port attacked', 'port struck', 'oil facility attacked',
+    'invokes article 5', 'article 5 invoked',
+    'scrambles jets', 'jets scrambled',
+    'airspace closed war', 'flights grounded war',
+    'fragments fell', 'debris fell', 'shrapnel hit',
+    'ballistic missile intercepted', 'cruise missile intercepted',
+    'regime change', 'operation epic fury'
 ]
 
 # ========================================
@@ -717,7 +785,7 @@ def detect_keyword_severity(text):
 
     text_lower = text.lower()
 
-    for severity_level in ['diplomatic_crisis', 'critical', 'high', 'elevated', 'moderate']:
+    for severity_level in ['active_war', 'diplomatic_crisis', 'critical', 'high', 'elevated', 'moderate']:
         for keyword in KEYWORD_SEVERITY[severity_level]['keywords']:
             if keyword in text_lower:
                 return KEYWORD_SEVERITY[severity_level]['multiplier']
@@ -1880,14 +1948,41 @@ def _run_threat_scan(target, days=7):
         except Exception as e:
             print(f"Arctic Today RSS error: {e}")
 
-    if target in ('turkey', 'cyprus'):
-        # Fetch Turkey/Cyprus-specific GDELT in Turkish
-        try:
-            turkey_query = 'türkiye askeri OR savaş OR İncirlik OR hava savunma'
-            articles_gdelt_tr = fetch_gdelt_articles(turkey_query, days, 'tur')
-            rss_articles.extend(articles_gdelt_tr)
-        except Exception as e:
-            print(f"Turkish GDELT error: {e}")
+    if target == 'turkey':
+        # Fetch Turkey-specific war GDELT queries
+        turkey_war_queries = [
+            ('Turkey intercept missile Iran', 'eng'),
+            ('Incirlik base attack Iran', 'eng'),
+            ('Turkey air defense Iran missile', 'eng'),
+            ('Turkey NATO article 5 Iran', 'eng'),
+            ('Turkey scramble jets intercept', 'eng'),
+            ('türkiye askeri OR savaş OR İncirlik OR hava savunma', 'tur'),
+            ('İncirlik üssü saldırı OR füze', 'tur'),
+            ('Türkiye hava savunma İran', 'tur'),
+        ]
+        for query, lang in turkey_war_queries:
+            try:
+                articles = fetch_gdelt_articles(query, days, lang)
+                rss_articles.extend(articles)
+            except Exception as e:
+                print(f"Turkey GDELT ({lang}) error: {e}")
+
+    if target == 'cyprus':
+        # Fetch Cyprus-specific war GDELT queries
+        cyprus_war_queries = [
+            ('Cyprus Akrotiri drone attack Iran', 'eng'),
+            ('Cyprus airspace closed war', 'eng'),
+            ('RAF Akrotiri strike Iran drone', 'eng'),
+            ('Cyprus evacuation UK forces', 'eng'),
+            ('Greek F-16 intercept drone Cyprus', 'eng'),
+            ('Cyprus UK base Iranian attack', 'eng'),
+        ]
+        for query, lang in cyprus_war_queries:
+            try:
+                articles = fetch_gdelt_articles(query, days, lang)
+                rss_articles.extend(articles)
+            except Exception as e:
+                print(f"Cyprus GDELT error: {e}")
 
     all_articles = (articles_en + articles_gdelt_en + articles_gdelt_ru +
                    articles_gdelt_fr + articles_gdelt_uk + articles_reddit +

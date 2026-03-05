@@ -1953,6 +1953,55 @@ def extract_casualty_data(articles):
 # ========================================
 
 AUTOROUTER_NOTAM_URL = "https://api.autorouter.aero/v1.0/notam"
+FAA_NOTAM_URL = "https://notams.aim.faa.gov/notamSearch/search"
+
+def fetch_notams_faa(icao_codes):
+    """Fetch NOTAMs from FAA NOTAM Search (worldwide coverage, free, no API key)."""
+    notams_found = []
+
+    for code in icao_codes[:4]:  # Limit to avoid hammering
+        try:
+            payload = {
+                'searchType': 0,
+                'designatorsForLocation': code,
+                'notamType': 'N',
+                'formatType': 1
+            }
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json'
+            }
+
+            response = requests.post(FAA_NOTAM_URL, data=payload, headers=headers, timeout=15)
+
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    items = data.get('notamList', [])
+                    for item in items:
+                        notam_text = item.get('icaoMessage', '') or item.get('traditionalMessage', '') or ''
+                        notams_found.append({
+                            'code': code,
+                            'text': notam_text,
+                            'id': item.get('notamNumber', ''),
+                            'effective_start': item.get('effectiveStart', ''),
+                            'effective_end': item.get('effectiveEnd', ''),
+                            'classification': item.get('classification', ''),
+                        })
+                except (json.JSONDecodeError, ValueError):
+                    # FAA sometimes returns HTML — skip
+                    print(f"[FAA NOTAM] {code}: Non-JSON response")
+            else:
+                print(f"[FAA NOTAM] {code}: HTTP {response.status_code}")
+
+            time.sleep(1)  # Rate limit courtesy
+
+        except Exception as e:
+            print(f"[FAA NOTAM] {code}: Error: {str(e)[:100]}")
+
+    return notams_found
+
 
 def fetch_notams_for_region(region_key):
     """Fetch real NOTAMs from Autorouter API for a European region."""
@@ -2045,6 +2094,38 @@ def fetch_notams_for_region(region_key):
         print(f"[NOTAM API] {region_key}: Timeout")
     except Exception as e:
         print(f"[NOTAM API] {region_key}: Error: {str(e)[:150]}")
+
+    # Fallback to FAA NOTAM Search if Autorouter returned nothing
+    if not notams:
+        print(f"[NOTAM API] {region_key}: Autorouter empty, trying FAA fallback...")
+        faa_codes = region.get('icao_codes', [])[:3]
+        faa_results = fetch_notams_faa(faa_codes)
+
+        for faa_notam in faa_results:
+            notam_text = faa_notam.get('text', '').upper()
+            classification = classify_notam(notam_text)
+            if not classification:
+                continue
+
+            notams.append({
+                'region': region_key,
+                'country': region['display_name'],
+                'flag': region['flag'],
+                'type': classification['type'],
+                'type_color': classification['color'],
+                'summary': faa_notam.get('text', '')[:250],
+                'raw_text': faa_notam.get('text', '')[:500],
+                'icao_location': faa_notam.get('code', ''),
+                'valid_from': faa_notam.get('effective_start', ''),
+                'valid_to': faa_notam.get('effective_end', ''),
+                'icao_codes': region['icao_codes'],
+                'fir_codes': region['fir_codes'],
+                'source': 'FAA NOTAM Search',
+                'source_url': f"https://notams.aim.faa.gov/notamSearch/nsapp.html#/details/{faa_notam.get('id', '')}"
+            })
+
+        if notams:
+            print(f"[NOTAM API] {region_key}: FAA fallback found {len(notams)} critical NOTAMs")
 
     return notams
 
@@ -2831,6 +2912,45 @@ def api_europe_dashboard():
 
 
 @app.route('/api/europe/notams', methods=['GET'])
+def api_europe_notams():
+    """European NOTAMs endpoint. Redis-cached with ?force=true override."""
+    try:
+        force = request.args.get('force', 'false').lower() == 'true'
+
+        if not force:
+            # Check in-memory first
+            cached = cache_get('notams')
+            if cached:
+                cached['cached'] = True
+                cached['cache_source'] = 'memory'
+                cached['cache_age_seconds'] = int(cache_age('notams') or 0)
+                return jsonify(cached)
+
+            # Check Redis (survives deploys)
+            is_fresh, redis_cached = is_notam_cache_fresh()
+            if is_fresh and redis_cached:
+                redis_cached['cached'] = True
+                redis_cached['cache_source'] = 'redis'
+                cache_set('notams', redis_cached)  # Warm in-memory
+                return jsonify(redis_cached)
+
+        if not check_rate_limit():
+            return jsonify({
+                'error': 'Rate limit exceeded',
+                'rate_limit': get_rate_limit_info()
+            }), 429
+
+        data = _run_notam_scan()
+        return jsonify(data)
+
+    except Exception as e:
+        print(f"Error in /api/europe/notams: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'notams': [],
+            'total_notams': 0
+        }), 500
 
 
 @app.route('/api/europe/flights', methods=['GET'])
@@ -2934,6 +3054,12 @@ def api_cache_status():
 def rate_limit_status():
     """Rate limit status endpoint"""
     return jsonify(get_rate_limit_info())
+
+
+@app.route('/robots.txt')
+def robots():
+    """Block all bots from crawling API endpoints."""
+    return "User-agent: *\nDisallow: /\n", 200, {'Content-Type': 'text/plain'}
 
 
 @app.route('/', methods=['GET'])

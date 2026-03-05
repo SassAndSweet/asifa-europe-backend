@@ -55,6 +55,8 @@ NOTAM_CACHE_TTL = 2 * 60 * 60
 UPSTASH_REDIS_URL = os.environ.get('UPSTASH_REDIS_URL')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN')
 NOTAM_REDIS_KEY = 'europe_notam_cache'
+FLIGHT_REDIS_KEY = 'europe_flight_cache'
+FLIGHT_CACHE_TTL = 12 * 60 * 60  # 12 hours
 
 # Rate limiting
 RATE_LIMIT = 100
@@ -171,7 +173,67 @@ def is_notam_cache_fresh():
     except:
         return False, None
 
+# ========================================
+# REDIS FLIGHT CACHE (persistent across deploys)
+# ========================================
+def load_flight_cache_redis():
+    """Load flight cache from Upstash Redis."""
+    if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
+        try:
+            resp = requests.get(
+                f"{UPSTASH_REDIS_URL}/get/{FLIGHT_REDIS_KEY}",
+                headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                timeout=5
+            )
+            data = resp.json()
+            if data.get("result"):
+                cache = json.loads(data["result"])
+                print(f"[Flight Cache] Loaded from Redis (cached_at: {cache.get('cached_at', 'unknown')})")
+                return cache
+        except Exception as e:
+            print(f"[Flight Cache] Redis load error: {e}")
+    return None
 
+
+def save_flight_cache_redis(data):
+    """Save flight cache to Upstash Redis."""
+    data['cached_at'] = datetime.now(timezone.utc).isoformat()
+    if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
+        try:
+            payload = json.dumps(data, default=str)
+            resp = requests.post(
+                f"{UPSTASH_REDIS_URL}/set/{FLIGHT_REDIS_KEY}",
+                headers={
+                    "Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}",
+                    "Content-Type": "application/json"
+                },
+                json={"value": payload},
+                timeout=10
+            )
+            if resp.status_code == 200:
+                print("[Flight Cache] ✅ Saved to Redis")
+            else:
+                print(f"[Flight Cache] Redis save HTTP {resp.status_code}")
+        except Exception as e:
+            print(f"[Flight Cache] Redis save error: {e}")
+
+
+def is_flight_cache_fresh():
+    """Check if flight Redis cache is still valid (12-hour TTL)."""
+    cached = load_flight_cache_redis()
+    if not cached or 'cached_at' not in cached:
+        return False, None
+    try:
+        cached_at = datetime.fromisoformat(cached['cached_at'])
+        age = (datetime.now(timezone.utc) - cached_at).total_seconds()
+        if age < FLIGHT_CACHE_TTL:
+            print(f"[Flight Cache] Fresh ({age/60:.0f}min old)")
+            return True, cached
+        print(f"[Flight Cache] Stale ({age/60:.0f}min old)")
+        return False, cached
+    except:
+        return False, None
+      
 # ========================================
 # BACKGROUND REFRESH THREAD
 # ========================================
@@ -210,7 +272,7 @@ def _refresh_all_caches():
 
         time.sleep(5)
 
-        # Refresh flight disruptions
+        # Refresh flight disruptions (Redis + in-memory)
         try:
             print("[Background Refresh] Refreshing flights...")
             flight_data = _run_flight_scan()
@@ -2259,7 +2321,17 @@ def _run_notam_scan():
 
 
 def _run_flight_scan():
-    """Run a full flight disruption scan. Returns the complete response dict."""
+    """Run a full flight disruption scan with Redis caching."""
+
+    # Check Redis cache first
+    is_fresh, cached = is_flight_cache_fresh()
+    if is_fresh and cached:
+        cached['cached'] = True
+        cached['cache_source'] = 'redis'
+        return cached
+
+    print("[Flight Scan] Running fresh flight disruption scan...")
+
     flight_queries = [
         'Europe flight cancelled OR suspended OR grounded OR diverted',
         'airline cancel flights Ukraine OR Russia OR Poland OR Baltic',
@@ -2267,7 +2339,9 @@ def _run_flight_scan():
         'NOTAM airspace restriction Europe',
         'Ryanair OR Lufthansa OR Wizz Air cancel OR suspend flights',
         'flight disruption war zone Europe',
-        'aviation safety Europe conflict'
+        'aviation safety Europe conflict',
+        'Turkey Istanbul Ankara flights cancelled OR suspended',
+        'Cyprus Larnaca Paphos flights cancelled OR closed',
     ]
 
     all_articles = []
@@ -2292,14 +2366,21 @@ def _run_flight_scan():
 
     disruptions = scan_european_flight_disruptions(unique_articles)
 
-    return {
+    result = {
         'success': True,
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'total_disruptions': len(disruptions),
         'disruptions': disruptions,
         'cancellations': disruptions,
-        'version': '1.1.0-europe'
+        'version': '1.2.0-europe',
+        'cached': False
     }
+
+    # Save to Redis + in-memory
+    save_flight_cache_redis(result)
+    cache_set('flights', result)
+
+    return result
 
 
 # ========================================
@@ -2449,16 +2530,26 @@ def api_europe_dashboard():
 
 @app.route('/api/europe/flights', methods=['GET'])
 def api_europe_flights():
-    """European flight disruptions endpoint. Cached with ?force=true override."""
+    """European flight disruptions endpoint. Redis-cached with ?force=true override."""
     try:
         force = request.args.get('force', 'false').lower() == 'true'
 
         if not force:
+            # Check in-memory first
             cached = cache_get('flights')
             if cached:
                 cached['cached'] = True
+                cached['cache_source'] = 'memory'
                 cached['cache_age_seconds'] = int(cache_age('flights') or 0)
                 return jsonify(cached)
+
+            # Check Redis (survives deploys)
+            is_fresh, redis_cached = is_flight_cache_fresh()
+            if is_fresh and redis_cached:
+                redis_cached['cached'] = True
+                redis_cached['cache_source'] = 'redis'
+                cache_set('flights', redis_cached)  # Warm in-memory
+                return jsonify(redis_cached)
 
         if not check_rate_limit():
             return jsonify({
@@ -2467,9 +2558,6 @@ def api_europe_flights():
             }), 429
 
         data = _run_flight_scan()
-        data['cached'] = False
-        cache_set('flights', data)
-
         return jsonify(data)
 
     except Exception as e:

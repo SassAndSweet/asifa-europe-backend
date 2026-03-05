@@ -182,7 +182,9 @@ TRAVEL_ADVISORY_CODES = {
     'greenland': ['GL', 'DA'],
     'ukraine': ['UP'],
     'russia': ['RS'],
-    'poland': ['PL']
+    'poland': ['PL'],
+    'turkey': ['TU'],
+    'cyprus': ['CY']
 }
 
 TRAVEL_ADVISORY_LEVELS = {
@@ -389,6 +391,14 @@ TARGET_BASELINES = {
     'poland': {
         'base_adjustment': +5,
         'description': 'NATO frontline state; recent Russian drone incursions; Belarus border tensions'
+    },
+    'turkey': {
+        'base_adjustment': +8,
+        'description': 'NATO member; Incirlik base targeted; Iran border tensions; Syria operations'
+    },
+    'cyprus': {
+        'base_adjustment': +10,
+        'description': 'Active Iranian drone strikes on RAF Akrotiri; European reinforcements deploying; US evacuation'
     }
 }
 
@@ -464,6 +474,65 @@ TARGET_KEYWORDS = {
             'drone', 'airspace', 'Belarus', 'Suwalki', 'missile',
             'defense', 'Ukraine'
         ]
+    },
+    'turkey': {
+        'keywords': [
+            'turkey', 'turkish', 'ankara', 'istanbul', 'erdogan',
+            'turkey military', 'turkish armed forces', 'turkish army',
+            'turkey nato', 'turkey article 5', 'nato turkey',
+            'incirlik', 'incirlik air base', 'incirlik attack',
+            'incirlik strike', 'incirlik base alert',
+            'turkish air force', 'turkish navy', 'turkish drone',
+            'bayraktar', 'akinci drone', 'turkish f-16',
+            'turkey syria', 'turkey syria operation', 'operation claw',
+            'turkey pkk', 'turkey northern iraq',
+            'turkey iran', 'iran attack turkey', 'iranian missile turkey',
+            'turkish airspace', 'turkish airspace violation',
+            'turkey intercept', 'turkey air defense',
+            'bosphorus military', 'turkish straits',
+            'turkey border', 'turkey border alert',
+            'turkey war', 'turkey conflict',
+            'turkey defense spending', 'turkish military exercise',
+            'turkish navy mediterranean', 'turkish naval exercise',
+            'turkey earthquake', 'turkey refugees',
+            'turkey election', 'turkey economy',
+            'turkey greece tensions', 'aegean dispute'
+        ],
+        'reddit_keywords': [
+            'Turkey', 'Erdogan', 'Ankara', 'Istanbul', 'NATO',
+            'Incirlik', 'Turkish military', 'Syria', 'Iran',
+            'Article 5', 'Bayraktar', 'airspace', 'Mediterranean'
+        ]
+    },
+    'cyprus': {
+        'keywords': [
+            'cyprus', 'cypriot', 'nicosia', 'limassol', 'larnaca', 'paphos',
+            'cyprus military', 'cyprus defense', 'cyprus defence',
+            'akrotiri', 'raf akrotiri', 'akrotiri base',
+            'akrotiri attack', 'akrotiri drone', 'akrotiri strike',
+            'dhekelia', 'dhekelia base', 'sovereign base areas',
+            'british bases cyprus', 'uk bases cyprus', 'uk forces cyprus',
+            'cyprus nato', 'cyprus eu',
+            'iran attack cyprus', 'iranian drone cyprus',
+            'iranian strike cyprus', 'iran missile cyprus',
+            'cyprus airspace closed', 'cyprus flights cancelled',
+            'cyprus evacuation', 'us evacuate cyprus',
+            'cyprus shelter', 'nicosia attack',
+            'andreas papandreou air base', 'paphos air base',
+            'cyprus intercept', 'cyprus air defense',
+            'european forces cyprus', 'france cyprus',
+            'greece deploy cyprus', 'greece cyprus military',
+            'cyprus reinforcement', 'destroyer cyprus',
+            'cyprus war', 'cyprus conflict',
+            'cyprus turkey tensions', 'northern cyprus',
+            'cyprus division', 'cyprus buffer zone', 'unficyp',
+            'cyprus gas', 'cyprus energy', 'east med gas'
+        ],
+        'reddit_keywords': [
+            'Cyprus', 'Akrotiri', 'RAF', 'UK base', 'Iran drone',
+            'evacuation', 'Nicosia', 'Limassol', 'NATO',
+            'British forces', 'Mediterranean', 'Turkey Cyprus'
+        ]
     }
 }
 
@@ -475,7 +544,9 @@ REDDIT_SUBREDDITS = {
     'greenland': ['Greenland', 'europe', 'geopolitics', 'worldnews', 'Denmark'],
     'ukraine': ['ukraine', 'UkraineWarVideoReport', 'UkrainianConflict', 'europe', 'geopolitics', 'worldnews'],
     'russia': ['russia', 'europe', 'geopolitics', 'worldnews'],
-    'poland': ['poland', 'Polska', 'europe', 'geopolitics', 'worldnews']
+    'poland': ['poland', 'Polska', 'europe', 'geopolitics', 'worldnews'],
+    'turkey': ['Turkey', 'turkish', 'europe', 'geopolitics', 'worldnews', 'syriancivilwar'],
+    'cyprus': ['cyprus', 'europe', 'geopolitics', 'worldnews', 'unitedkingdom']
 }
 
 # ========================================
@@ -565,6 +636,18 @@ NOTAM_REGIONS = {
         'icao_codes': ['LUKK'],
         'display_name': 'Moldova',
         'flag': '🇲🇩'
+    },
+    'turkey': {
+        'fir_codes': ['LTAA', 'LTBB'],
+        'icao_codes': ['LTBA', 'LTAC', 'LTAI', 'LTBJ', 'LTFE'],
+        'display_name': 'Turkey',
+        'flag': '🇹🇷'
+    },
+    'cyprus': {
+        'fir_codes': ['LCCC'],
+        'icao_codes': ['LCLK', 'LCPH', 'LCRA'],
+        'display_name': 'Cyprus',
+        'flag': '🇨🇾'
     }
 }
 
@@ -1535,7 +1618,9 @@ def scan_european_flight_disruptions(all_articles):
         'Austrian Airlines', 'Brussels Airlines', 'TAP Portugal',
         'Icelandair', 'Air Baltic', 'Condor', 'Pegasus Airlines',
         'Ukraine International', 'Belavia', 'Nordica', 'airBaltic',
-        'Eurowings', 'Transavia', 'Volotea', 'Air Europa'
+        'Eurowings', 'Transavia', 'Volotea', 'Air Europa',
+        'Cyprus Airways', 'Cobalt Air', 'TUS Airways',
+        'SunExpress', 'AnadoluJet', 'Corendon Airlines'
     ]
 
     flight_keywords = [
@@ -1589,7 +1674,9 @@ def scan_european_flight_disruptions(all_articles):
                 'ukraine', 'russia', 'poland', 'baltic', 'europe', 'european',
                 'greenland', 'denmark', 'moldova', 'romania', 'belarus',
                 'kaliningrad', 'crimea', 'kyiv', 'moscow', 'warsaw',
-                'nato', 'arctic'
+                'nato', 'arctic',
+                'turkey', 'istanbul', 'ankara', 'incirlik',
+                'cyprus', 'nicosia', 'larnaca', 'akrotiri', 'paphos'
             ])
 
             if has_flight_context and has_disruption and has_europe_context:
@@ -1629,7 +1716,9 @@ def extract_destination(text):
         'Kaliningrad', 'Greenland', 'Iceland', 'Arctic',
         'Baltic', 'Estonia', 'Latvia', 'Lithuania',
         'Romania', 'Bucharest', 'Poland', 'Helsinki',
-        'St. Petersburg', 'Saint Petersburg'
+        'St. Petersburg', 'Saint Petersburg',
+        'Turkey', 'Istanbul', 'Ankara', 'Antalya', 'Izmir',
+        'Cyprus', 'Nicosia', 'Larnaca', 'Paphos', 'Limassol'
     ]
 
     for dest in european_destinations:
@@ -1790,6 +1879,15 @@ def _run_threat_scan(target, days=7):
             rss_articles.extend(fetch_arctic_today_rss())
         except Exception as e:
             print(f"Arctic Today RSS error: {e}")
+
+    if target in ('turkey', 'cyprus'):
+        # Fetch Turkey/Cyprus-specific GDELT in Turkish
+        try:
+            turkey_query = 'türkiye askeri OR savaş OR İncirlik OR hava savunma'
+            articles_gdelt_tr = fetch_gdelt_articles(turkey_query, days, 'tur')
+            rss_articles.extend(articles_gdelt_tr)
+        except Exception as e:
+            print(f"Turkish GDELT error: {e}")
 
     all_articles = (articles_en + articles_gdelt_en + articles_gdelt_ru +
                    articles_gdelt_fr + articles_gdelt_uk + articles_reddit +

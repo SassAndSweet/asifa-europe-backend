@@ -327,7 +327,7 @@ def _refresh_all_caches():
 
         # Refresh NOTAMs (uses Redis + in-memory)
         try:
-            print("[Background Refresh] Refreshing NOTAMs via Autorouter API...")
+            print("[Background Refresh] Refreshing NOTAMs via FAA...")
             notam_data = _run_notam_scan()
             cache_set('notams', notam_data)
             print(f"[Background Refresh] ✓ NOTAMs cached ({notam_data.get('total_notams', 0)} critical alerts)")
@@ -1948,18 +1948,24 @@ def extract_casualty_data(articles):
 
 
 # ========================================
-# NOTAM SCANNING — REAL API (v1.2.0)
-# Uses Autorouter API (Eurocontrol EAD source)
+# NOTAM SCANNING — FAA NOTAM Search (v1.4.0)
+# Worldwide coverage, free, no API key required
+# Replaces Autorouter (HTTP 401 — requires paid Eurocontrol license)
 # ========================================
 
-AUTOROUTER_NOTAM_URL = "https://api.autorouter.aero/v1.0/notam"
 FAA_NOTAM_URL = "https://notams.aim.faa.gov/notamSearch/search"
 
-def fetch_notams_faa(icao_codes):
-    """Fetch NOTAMs from FAA NOTAM Search (worldwide coverage, free, no API key)."""
-    notams_found = []
 
-    for code in icao_codes[:4]:  # Limit to avoid hammering
+def fetch_notams_for_region(region_key):
+    """Fetch real NOTAMs from FAA NOTAM Search for a region."""
+    region = NOTAM_REGIONS.get(region_key)
+    if not region:
+        return []
+
+    notams = []
+    icao_codes = region.get('icao_codes', [])[:3]  # Limit to 3 airports per region
+
+    for code in icao_codes:
         try:
             payload = {
                 'searchType': 0,
@@ -1973,160 +1979,56 @@ def fetch_notams_faa(icao_codes):
                 'Accept': 'application/json'
             }
 
+            print(f"[NOTAM API] Fetching {region_key}/{code} from FAA...")
             response = requests.post(FAA_NOTAM_URL, data=payload, headers=headers, timeout=15)
 
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                    items = data.get('notamList', [])
-                    for item in items:
-                        notam_text = item.get('icaoMessage', '') or item.get('traditionalMessage', '') or ''
-                        notams_found.append({
-                            'code': code,
-                            'text': notam_text,
-                            'id': item.get('notamNumber', ''),
-                            'effective_start': item.get('effectiveStart', ''),
-                            'effective_end': item.get('effectiveEnd', ''),
-                            'classification': item.get('classification', ''),
-                        })
-                except (json.JSONDecodeError, ValueError):
-                    # FAA sometimes returns HTML — skip
-                    print(f"[FAA NOTAM] {code}: Non-JSON response")
-            else:
-                print(f"[FAA NOTAM] {code}: HTTP {response.status_code}")
+            if response.status_code != 200:
+                print(f"[NOTAM API] {code}: HTTP {response.status_code}")
+                continue
+
+            try:
+                data = response.json()
+            except (json.JSONDecodeError, ValueError):
+                print(f"[NOTAM API] {code}: Non-JSON response, skipping")
+                continue
+
+            items = data.get('notamList', [])
+            print(f"[NOTAM API] {code}: {len(items)} raw NOTAMs returned")
+
+            for item in items:
+                notam_text = item.get('icaoMessage', '') or item.get('traditionalMessage', '') or ''
+                if not notam_text:
+                    continue
+
+                classification = classify_notam(notam_text.upper())
+                if not classification:
+                    continue  # Skip non-critical NOTAMs
+
+                notams.append({
+                    'region': region_key,
+                    'country': region['display_name'],
+                    'flag': region['flag'],
+                    'type': classification['type'],
+                    'type_color': classification['color'],
+                    'summary': notam_text[:250],
+                    'raw_text': notam_text[:500],
+                    'icao_location': code,
+                    'valid_from': item.get('effectiveStart', ''),
+                    'valid_to': item.get('effectiveEnd', ''),
+                    'icao_codes': region['icao_codes'],
+                    'fir_codes': region['fir_codes'],
+                    'source': 'FAA NOTAM Search',
+                    'source_url': f"https://notams.aim.faa.gov/notamSearch/nsapp.html#/details/{item.get('notamNumber', '')}"
+                })
 
             time.sleep(1)  # Rate limit courtesy
 
+        except requests.Timeout:
+            print(f"[NOTAM API] {code}: Timeout")
         except Exception as e:
-            print(f"[FAA NOTAM] {code}: Error: {str(e)[:100]}")
+            print(f"[NOTAM API] {code}: Error: {str(e)[:150]}")
 
-    return notams_found
-
-
-def fetch_notams_for_region(region_key):
-    """Fetch real NOTAMs from Autorouter API for a European region."""
-    region = NOTAM_REGIONS.get(region_key)
-    if not region:
-        return []
-
-    notams = []
-    fir_codes = region.get('fir_codes', [])
-    icao_codes = region.get('icao_codes', [])
-    all_codes = fir_codes + icao_codes
-
-    if not all_codes:
-        return []
-
-    try:
-        # Query Autorouter with FIR + airport codes
-        codes_json = json.dumps(all_codes[:6])  # Limit to 6 codes per query
-        params = {
-            'itemas': codes_json,
-            'offset': 0,
-            'limit': 50
-        }
-
-        headers = {
-            'User-Agent': 'AsifahAnalytics-Europe/1.2.0 (OSINT monitoring)',
-            'Accept': 'application/json'
-        }
-
-        print(f"[NOTAM API] Fetching {region_key}: {all_codes[:6]}")
-        response = requests.get(AUTOROUTER_NOTAM_URL, params=params, headers=headers, timeout=20)
-
-        if response.status_code != 200:
-            print(f"[NOTAM API] {region_key}: HTTP {response.status_code}")
-            return []
-
-        data = response.json()
-
-        # Autorouter returns a list of NOTAM objects
-        raw_notams = data if isinstance(data, list) else data.get('notams', data.get('rows', []))
-
-        for notam in raw_notams:
-            # Extract NOTAM text — field name varies
-            notam_text = (
-                notam.get('all', '') or
-                notam.get('text', '') or
-                notam.get('message', '') or
-                notam.get('e', '') or
-                str(notam)
-            )
-
-            # Extract item E (the actual notice text)
-            item_e = notam.get('e', '') or notam.get('itemE', '') or ''
-
-            # Use full text for classification
-            full_text = f"{notam_text} {item_e}".upper()
-
-            # Classify severity
-            classification = classify_notam(full_text)
-            if not classification:
-                continue  # Skip non-critical NOTAMs
-
-            # Extract dates
-            valid_from = notam.get('b', '') or notam.get('startValidity', '') or notam.get('effectiveStart', '')
-            valid_to = notam.get('c', '') or notam.get('endValidity', '') or notam.get('effectiveEnd', '')
-
-            # Extract ICAO location
-            icao_loc = notam.get('a', '') or notam.get('itema', '') or notam.get('location', '')
-
-            notams.append({
-                'region': region_key,
-                'country': region['display_name'],
-                'flag': region['flag'],
-                'type': classification['type'],
-                'type_color': classification['color'],
-                'summary': item_e[:250] if item_e else notam_text[:250],
-                'raw_text': notam_text[:500],
-                'icao_location': icao_loc,
-                'valid_from': valid_from,
-                'valid_to': valid_to,
-                'icao_codes': region['icao_codes'],
-                'fir_codes': region['fir_codes'],
-                'source': 'Autorouter / Eurocontrol EAD',
-                'source_url': f"https://www.autorouter.aero/notam?location={icao_loc}" if icao_loc else ''
-            })
-
-        print(f"[NOTAM API] {region_key}: {len(notams)} critical NOTAMs (from {len(raw_notams)} total)")
-
-    except requests.Timeout:
-        print(f"[NOTAM API] {region_key}: Timeout")
-    except Exception as e:
-        print(f"[NOTAM API] {region_key}: Error: {str(e)[:150]}")
-
-    # Fallback to FAA NOTAM Search if Autorouter returned nothing
-    if not notams:
-        print(f"[NOTAM API] {region_key}: Autorouter empty, trying FAA fallback...")
-        faa_codes = region.get('icao_codes', [])[:3]
-        faa_results = fetch_notams_faa(faa_codes)
-
-        for faa_notam in faa_results:
-            notam_text = faa_notam.get('text', '').upper()
-            classification = classify_notam(notam_text)
-            if not classification:
-                continue
-
-            notams.append({
-                'region': region_key,
-                'country': region['display_name'],
-                'flag': region['flag'],
-                'type': classification['type'],
-                'type_color': classification['color'],
-                'summary': faa_notam.get('text', '')[:250],
-                'raw_text': faa_notam.get('text', '')[:500],
-                'icao_location': faa_notam.get('code', ''),
-                'valid_from': faa_notam.get('effective_start', ''),
-                'valid_to': faa_notam.get('effective_end', ''),
-                'icao_codes': region['icao_codes'],
-                'fir_codes': region['fir_codes'],
-                'source': 'FAA NOTAM Search',
-                'source_url': f"https://notams.aim.faa.gov/notamSearch/nsapp.html#/details/{faa_notam.get('id', '')}"
-            })
-
-        if notams:
-            print(f"[NOTAM API] {region_key}: FAA fallback found {len(notams)} critical NOTAMs")
-
+    print(f"[NOTAM API] {region_key}: {len(notams)} critical NOTAMs found via FAA")
     return notams
 
 
@@ -2671,7 +2573,7 @@ def _run_notam_scan():
         return cached
 
     # Run fresh scan
-    print("[NOTAM Scan] Running fresh NOTAM scan from Autorouter API...")
+    print("[NOTAM Scan] Running fresh NOTAM scan from FAA...")
     notams = scan_all_europe_notams()
 
     result = {

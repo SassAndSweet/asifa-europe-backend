@@ -305,6 +305,10 @@ def _refresh_all_caches():
     Refresh all cached data in the background.
     Runs every CACHE_TTL seconds so no user request ever triggers a cold scan.
     """
+    # Let the app fully boot before first refresh cycle
+    print("[Background Refresh] Waiting 30s for app to stabilize before first refresh...")
+    time.sleep(30)
+
     targets = list(TARGET_KEYWORDS.keys())
 
     while True:

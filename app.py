@@ -2516,17 +2516,25 @@ def _run_threat_scan(target, days=7):
         try:
             telegram_msgs = fetch_europe_telegram_signals(hours_back=days*24, include_extended=True)
             if telegram_msgs:
+                target_kws = [kw.lower() for kw in TARGET_KEYWORDS.get(target, {}).get('keywords', [])]
+                target_name = target.replace('_', ' ').lower()
+                skipped = 0
                 for msg in telegram_msgs:
-                    telegram_articles.append({
-                        'title': msg.get('title', '')[:200],
-                        'description': msg.get('title', '')[:500],
-                        'url': msg.get('url', ''),
-                        'publishedAt': msg.get('published', ''),
-                        'source': {'name': msg.get('source', 'Telegram')},
-                        'content': msg.get('title', '')[:500],
-                        'language': 'multi'
-                    })
-                print(f"[Europe Scan] Telegram: {len(telegram_articles)} messages")
+                    msg_text = (msg.get('title', '') or '').lower()
+                    relevant = target_name in msg_text or any(kw in msg_text for kw in target_kws[:15])
+                    if relevant:
+                        telegram_articles.append({
+                            'title': msg.get('title', '')[:200],
+                            'description': msg.get('title', '')[:500],
+                            'url': msg.get('url', ''),
+                            'publishedAt': msg.get('published', ''),
+                            'source': {'name': msg.get('source', 'Telegram')},
+                            'content': msg.get('title', '')[:500],
+                            'language': 'multi'
+                        })
+                    else:
+                        skipped += 1
+                print(f"[Europe Scan] Telegram: {len(telegram_articles)} relevant / {skipped} skipped for {target}")
         except Exception as e:
             print(f"[Europe Scan] Telegram error: {str(e)[:100]}")
 

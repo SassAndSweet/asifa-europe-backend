@@ -2532,8 +2532,7 @@ def _run_threat_scan(target, days=7):
 
     all_articles = (articles_en + articles_gdelt_en + articles_gdelt_ru +
                    articles_gdelt_fr + articles_gdelt_uk + articles_reddit +
-                   rss_articles + telegram_articles)_fr + articles_gdelt_uk + articles_reddit +
-                   rss_articles)
+                   rss_articles + telegram_articles)
 
     # Score
     scoring_result = calculate_threat_probability(all_articles, days, target)

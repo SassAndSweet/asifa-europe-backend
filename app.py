@@ -44,6 +44,15 @@ except ImportError:
     TELEGRAM_AVAILABLE = False
     print("[Europe Backend] ⚠️ Telegram signals not available")
 
+# Ukraine humanitarian data module (DTM API + ReliefWeb + OCHA)
+try:
+    from ukraine_humanitarian import register_ukraine_humanitarian_endpoints
+    UKRAINE_HUMANITARIAN_AVAILABLE = True
+    print("[Europe Backend] ✅ Ukraine humanitarian module loaded")
+except ImportError:
+    UKRAINE_HUMANITARIAN_AVAILABLE = False
+    print("[Europe Backend] ⚠️ Ukraine humanitarian module not available")
+
 app = Flask(__name__)
 # CORS handled by after_request handler
 
@@ -3088,7 +3097,10 @@ def health():
         'cache_entries': len(_cache)
     })
 
-
+# Register Ukraine humanitarian endpoints
+if UKRAINE_HUMANITARIAN_AVAILABLE:
+    register_ukraine_humanitarian_endpoints(app)
+  
 # ========================================
 # START BACKGROUND REFRESH ON BOOT
 # ========================================

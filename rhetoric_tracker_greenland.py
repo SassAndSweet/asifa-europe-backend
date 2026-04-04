@@ -196,11 +196,16 @@ ACTORS = {
             # Danish government statements
             'denmark rejects', 'denmark greenland sovereignty',
             'denmark not for sale', 'denmark greenland not sale',
-            'danish prime minister greenland', 'mette frederiksen greenland',
+            'danish prime minister greenland', 'danish pm greenland',
+            'danish pm pledges greenland', 'danish pm supports greenland',
+            'mette frederiksen greenland', 'danish pm mette',
             'lars lokke greenland', 'copenhagen greenland',
             'danish foreign minister greenland', 'danish government greenland',
             'denmark us greenland', 'denmark protests us',
             'denmark greenland response', 'denmark greenland firm',
+            'denmark supports greenland', 'denmark backs greenland',
+            'denmark pledges greenland', 'danish support greenland',
+            'denmark trump greenland', 'denmark pressure greenland',
             # Danish military deployment (sovereignty signaling)
             'danish frigate greenland', 'danish navy arctic',
             'arktisk kommando', 'arctic command denmark',
@@ -258,8 +263,9 @@ ACTORS = {
             # Arctic Council disruption
             'arctic council russia', 'russia arctic council',
             'arctic council disruption', 'arctic governance russia',
-            # Russian media framing (English-language RT/TASS signals)
-            'rt greenland', 'tass greenland', 'russia today greenland',
+            # Russian media framing (English-language TASS signals)
+            'russia today greenland', 'tass greenland',
+            'russia today arctic', 'tass arctic greenland',
             'russia greenland nato threat', 'russia greenland hypocrisy',
             'russia nato expansion arctic',
             # Russian language keywords (GDELT)

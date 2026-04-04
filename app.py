@@ -53,6 +53,15 @@ except ImportError:
     UKRAINE_HUMANITARIAN_AVAILABLE = False
     print("[Europe Backend] ⚠️ Ukraine humanitarian module not available")
 
+# Greenland sovereignty rhetoric tracker
+try:
+    from rhetoric_tracker_greenland import register_greenland_rhetoric_routes
+    GREENLAND_RHETORIC_AVAILABLE = True
+    print("[Europe Backend] ✅ Greenland rhetoric tracker loaded")
+except ImportError:
+    GREENLAND_RHETORIC_AVAILABLE = False
+    print("[Europe Backend] ⚠️ Greenland rhetoric tracker not available")
+
 app = Flask(__name__)
 # CORS handled by after_request handler
 
@@ -3100,6 +3109,11 @@ def health():
 # Register Ukraine humanitarian endpoints
 if UKRAINE_HUMANITARIAN_AVAILABLE:
     register_ukraine_humanitarian_endpoints(app)
+
+# Register Greenland rhetoric tracker
+if GREENLAND_RHETORIC_AVAILABLE:
+    register_greenland_rhetoric_routes(app)
+    print("[Europe Backend] ✅ Greenland rhetoric routes registered")
   
 # ========================================
 # START BACKGROUND REFRESH ON BOOT

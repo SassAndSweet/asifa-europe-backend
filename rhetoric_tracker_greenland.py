@@ -324,9 +324,9 @@ RSS_FEEDS = [
 # No API key required — public RSS.
 # ============================================
 NITTER_MIRRORS = [
-    'nitter.poast.org',
-    'nitter.privacydev.net',
-    'nitter.tiekoetter.com',
+    "nitter.poast.org",
+    "nitter.privacydev.net",
+    "nitter.woodland.cafe",
 ]
 
 # Account list: (username, weight, description)

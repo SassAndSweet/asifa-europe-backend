@@ -2270,9 +2270,9 @@ def extract_casualty_data(articles):
 # ========================================
 
 NITTER_MIRRORS = [
-    'nitter.poast.org',
-    'nitter.privacydev.net',
-    'nitter.tiekoetter.com',
+    "nitter.poast.org",
+    "nitter.privacydev.net",
+    "nitter.woodland.cafe",
 ]
 
 # (username, weight, targets[], description)

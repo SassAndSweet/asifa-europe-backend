@@ -83,6 +83,14 @@ except ImportError:
     TELEGRAM_AVAILABLE = False
     print("[Greenland Rhetoric] ⚠️ Telegram signals not available — RSS/GDELT only")
 
+try:
+    from greenland_signal_interpreter import interpret_signals as greenland_interpret_signals
+    INTERPRETER_AVAILABLE = True
+    print("[Greenland Rhetoric] ✅ Signal interpreter loaded")
+except ImportError:
+    INTERPRETER_AVAILABLE = False
+    print("[Greenland Rhetoric] ⚠️ Signal interpreter not available")
+
 RHETORIC_CACHE_KEY  = 'rhetoric:greenland:latest'
 HISTORY_KEY         = 'rhetoric:greenland:history'
 BASELINE_KEY        = 'rhetoric_baseline:greenland'
@@ -821,6 +829,16 @@ def run_greenland_rhetoric_scan(days=5):
         'is_strike_actor':      False,   # Inverted model — no strike actor
         'is_sovereignty_crisis': composite['theatre_level'] >= 3,
     }
+
+    # Signal interpretation -- So What, Red Lines, Historical Patterns
+    if INTERPRETER_AVAILABLE:
+        try:
+            result['interpretation'] = greenland_interpret_signals(result)
+            breached = result['interpretation']['red_lines']['breached_count']
+            scenario = result['interpretation']['so_what'].get('scenario', 'N/A')
+            print(f'[Greenland Rhetoric] Interpreter: {breached} red lines breached | {scenario}')
+        except Exception as ie:
+            print(f'[Greenland Rhetoric] Interpreter error: {str(ie)[:100]}')
 
     print(f'[Greenland Rhetoric] Scan complete in {elapsed}s | Theatre L{composite["theatre_level"]} ({composite["theatre_score"]}/100) | {composite["convergence_signal"] or "No convergence signal"}')
     return result

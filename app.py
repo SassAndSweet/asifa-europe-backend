@@ -72,7 +72,7 @@ NEWSAPI_KEY = os.environ.get('NEWSAPI_KEY')
 GDELT_BASE_URL = "http://api.gdeltproject.org/api/v2/doc/doc"
 
 # Cache TTL in seconds (4 hours)
-CACHE_TTL = 4 * 60 * 60
+CACHE_TTL = 12 * 60 * 60
 
 # NOTAM cache TTL (2 hours — NOTAMs change faster than threat scores)
 NOTAM_CACHE_TTL = 2 * 60 * 60
@@ -1659,7 +1659,7 @@ def fetch_gdelt_articles(query, days=7, language='eng'):
             'sourcelang': language
         }
 
-        response = requests.get(GDELT_BASE_URL, params=params, timeout=15)
+        response = requests.get(GDELT_BASE_URL, params=params, timeout=(5, 15))
 
         if response.status_code == 200:
             data = response.json()

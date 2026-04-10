@@ -332,8 +332,8 @@ def _refresh_all_caches():
     Runs every CACHE_TTL seconds so no user request ever triggers a cold scan.
     """
     # Let the app fully boot before first refresh cycle
-    print("[Background Refresh] Waiting 30s for app to stabilize before first refresh...")
-    time.sleep(30)
+    print("[Background Refresh] Waiting 90s for app to stabilize before first refresh...")
+    time.sleep(90)
 
     targets = list(TARGET_KEYWORDS.keys())
 
@@ -3417,6 +3417,13 @@ def api_europe_travel_advisories():
                 cached['cached'] = True
                 cached['cache_age_seconds'] = int(cache_age('travel_advisories') or 0)
                 return jsonify(cached)
+            # Redis fallback — survives cold starts
+            redis_cached = load_threat_cache_redis('travel_advisories', days=1)
+            if redis_cached:
+                redis_cached['cached'] = True
+                redis_cached['cache_source'] = 'redis'
+                cache_set('travel_advisories', redis_cached)
+                return jsonify(redis_cached)
 
         data = _run_travel_advisory_scan()
         data['cached'] = False

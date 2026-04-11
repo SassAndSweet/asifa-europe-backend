@@ -676,6 +676,7 @@ def run_russia_stability_scan():
     ]
 
     article_buckets = {k: [] for k in KEYWORD_VECTORS.keys()}
+    article_buckets['sanctions_economy'] = []   # Live market signals bucket
 
     for query, bucket in newsapi_queries:
         articles = _fetch_newsapi_articles(query, days=5)

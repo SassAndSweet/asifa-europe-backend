@@ -673,29 +673,63 @@ def run_russia_stability_scan():
         ('Russia oligarch Kremlin purge silovik conflict',     'leadership'),
         ('Russia China sanctions India oil BRICS alignment',   'global_alignment'),
         ('Russia shadow fleet oil tanker sanctions evade',     'global_alignment'),
+        ('Russia Ukraine war frontline Zaporizhzhia Kherson',  'sanctions_economy'),
+        ('Russia ruble inflation economy wartime budget',      'sanctions_economy'),
+        ('Russia military posture NATO nuclear Gerasimov',     'sanctions_economy'),
     ]
 
     article_buckets = {k: [] for k in KEYWORD_VECTORS.keys()}
     article_buckets['sanctions_economy'] = []   # Live market signals bucket
 
+    articles_en     = []   # English articles for frontend tab
+    articles_ru     = []   # Russian-language articles for frontend tab
+    articles_reddit = []   # Reddit articles for frontend tab
+
     for query, bucket in newsapi_queries:
-        articles = _fetch_newsapi_articles(query, days=5)
-        all_articles.extend(articles)
-        article_buckets[bucket].extend(articles)
+        fetched = _fetch_newsapi_articles(query, days=5)
+        for a in fetched:
+            a['language'] = 'en'
+        all_articles.extend(fetched)
+        article_buckets[bucket].extend(fetched)
+        articles_en.extend(fetched)
 
     # GDELT for Russian-language signals
     gdelt_queries = [
         ('Россия протест оппозиция арест', 'internal_cohesion', 'rus'),
         ('Путин Кремль руководство преемник', 'leadership', 'rus'),
         ('Россия Китай санкции обход', 'global_alignment', 'rus'),
+        ('Россия война Украина фронт', 'sanctions_economy', 'rus'),
+        ('Россия экономика санкции инфляция рубль', 'sanctions_economy', 'rus'),
         ('Russia domestic unrest dissent protest', 'internal_cohesion', 'eng'),
         ('Russia sanctions economy inflation ruble', 'sanctions_economy', 'eng'),
+        ('Russia Ukraine war ceasefire frontline 2026', 'sanctions_economy', 'eng'),
+        ('Russia NATO military posture nuclear signaling', 'sanctions_economy', 'eng'),
     ]
 
     for query, bucket, lang in gdelt_queries:
-        articles = _fetch_gdelt_articles(query, language=lang, days=5)
-        all_articles.extend(articles)
-        article_buckets[bucket].extend(articles)
+        fetched = _fetch_gdelt_articles(query, language=lang, days=5)
+        lang_tag = 'ru' if lang == 'rus' else 'en'
+        for a in fetched:
+            a['language'] = lang_tag
+        all_articles.extend(fetched)
+        article_buckets[bucket].extend(fetched)
+        if lang_tag == 'ru':
+            articles_ru.extend(fetched)
+        else:
+            articles_en.extend(fetched)
+
+    # Reddit via GDELT
+    reddit_queries = [
+        'site:reddit.com Russia Ukraine war',
+        'site:reddit.com Russia sanctions economy',
+        'site:reddit.com Russia military Kremlin Putin',
+    ]
+    for rq in reddit_queries:
+        fetched = _fetch_gdelt_articles(rq, language='eng', days=7)
+        for a in fetched:
+            a['language'] = 'reddit'
+        all_articles.extend(fetched)
+        articles_reddit.extend(fetched)
 
     # Score article-based vectors
     cohesion_level   = _score_vector_from_articles(article_buckets['internal_cohesion'], KEYWORD_VECTORS['internal_cohesion'])
@@ -760,12 +794,17 @@ def run_russia_stability_scan():
         'war_status':           STATIC_WAR_STATUS,
         'leadership':           RUSSIA_LEADERSHIP,
 
+        # Articles by language for frontend tabs
+        'articles_en':          articles_en[:25],
+        'articles_ru':          articles_ru[:25],
+        'articles_reddit':      articles_reddit[:25],
+
         # Metadata
         'total_articles':       len(all_articles),
         'scan_time_seconds':    scan_time,
         'scanned_at':           scanned_at,
         'from_cache':           False,
-        'version':              '1.0.0',
+        'version':              '1.1.0',
     }
 
     # Cache to Redis
@@ -881,8 +920,11 @@ def register_russia_stability_endpoints(app):
             'moex_status':      cached.get('moex_status', 'unknown'),
             'leadership':       cached.get('leadership', RUSSIA_LEADERSHIP),
             'total_articles':   cached.get('total_articles', 0),
+            'articles_en':      cached.get('articles_en', []),
+            'articles_ru':      cached.get('articles_ru', []),
+            'articles_reddit':  cached.get('articles_reddit', []),
             'scanned_at':       cached.get('scanned_at', ''),
-            'version':          '1.0.0-russia-stability',
+            'version':          '1.1.0-russia-stability',
         })
 
     @app.route('/api/stability/russia/history', methods=['GET'])

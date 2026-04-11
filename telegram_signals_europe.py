@@ -102,27 +102,51 @@ EXTENDED_EUROPE_CHANNELS = [
 # Focuses on U.S. pressure, Danish/NATO response,
 # Inuit voice, Russian Arctic opportunism, Nordic OSINT
 GREENLAND_CHANNELS = [
-    # U.S. pressure signals
-    'CentcomOfficial',     # CENTCOM — U.S. military posture statements
-    'StateDeptSpox',       # State Dept spokesperson — U.S. diplomatic framing
-    # Danish government / sovereignty response
-    'DanishMFA',           # Danish Ministry of Foreign Affairs
-    'DanishDefence',       # Danish Defence Command
-    # Greenlandic voice
-    'NuukToday',           # Nuuk Today — Greenlandic local news
-    'KNR_Greenland',       # KNR — Kalaallit Nunaata Radioa (Greenlandic Broadcasting)
-    # NATO / Nordic allies
-    'NATOpress',           # NATO official
-    'NorwayMFA',           # Norwegian MFA — Nordic solidarity
-    'IcelandicMFA',        # Iceland — Arctic Council, GIUK gap signals
-    # Russia Arctic opportunism
-    'mod_russia_en',       # Russian MoD English — Arctic posturing
-    'IntelSlava',          # Intel Slava — Russia Arctic signals
-    # Arctic OSINT
-    'arctictoday',         # Arctic Today — dedicated Greenland/Arctic
-    'high_north_news',     # High North News — Norwegian Arctic outlet
-    'GeoPWatch',           # Geopolitics Watch — broader Arctic OSINT
-    'OSINTdefender',       # OSINT Defender — general high-signal
+    # ── U.S. pressure signals ─────────────────────────────────────
+    'CENTCOM',             # ✅ CENTCOM official (confirmed handle)
+    'StateDept',           # ✅ State Dept (confirmed working in ME backend)
+    # ── Russia Arctic opportunism ─────────────────────────────────
+    'mod_russia_en',       # ✅ Russian MoD English (49 msg confirmed)
+    'intelslava',          # ✅ Intel Slava — Russia Arctic signals
+    # ── Arctic / Nordic OSINT ─────────────────────────────────────
+    'arctictoday',         # ✅ Arctic Today (exists, slow channel)
+    'NorwayMFA',           # ✅ Norwegian MFA (exists)
+    'OSINTdefender',       # ✅ OSINT Defender — high signal (50 msg confirmed)
+    'ClashReport',         # ✅ Clash Report — catches Arctic incidents
+    # ── General high-signal (catches Greenland mentions) ──────────
+    'WarMonitors',         # ✅ War Monitor — multilingual
+    'France24_en',         # ✅ France 24 — covers Arctic/NATO stories
+]
+
+
+# ── Russia-specific channel list (v1.2.0) ──
+# Used by rhetoric_tracker_russia.py
+# Focuses on Russian military ops, Ukraine front,
+# nuclear/strategic signals, Baltic/Arctic, domestic Russia
+RUSSIA_CHANNELS = [
+    # ── Russian military / MoD ────────────────────────────────────
+    'mod_russia_en',       # ✅ Russian MoD English (49 msg confirmed)
+    'rybar',               # ✅ Rybar — primary Russian mil blogger
+    'intelslava',          # ✅ Intel Slava Z — very active OSINT
+    # ── Ukraine front ────────────────────────────────────────────
+    'DeepStateUA',         # ✅ DeepState Map — front updates (16 msg)
+    'wartranslated',       # War Translated — Russian/Ukrainian mil comms EN
+    'front_ukrainian',     # Ukrainian front OSINT
+    'OSINTdefender',       # ✅ OSINT Defender (50 msg confirmed)
+    'ClashReport',         # ✅ Clash Report (47 msg confirmed)
+    'WarMonitors',         # ✅ War Monitor (46 msg confirmed)
+    'C_Military1',         # ✅ Conflict OSINT (37 msg confirmed)
+    # ── Russia domestic / opposition ──────────────────────────────
+    'meduzaio',            # Meduza — independent Russian journalism
+    'nexta_tv',            # NEXTA — Belarus/Russia opposition
+    'currenttime',         # Current Time — RFE/RL Russian service
+    # ── Nuclear / strategic ───────────────────────────────────────
+    'nuclearsecrecy',      # Nuclear Secrecy — arms control signals
+    # ── Arctic / NATO flank ───────────────────────────────────────
+    'arctictoday',         # Arctic Today — Northern Fleet/Arctic signals
+    'NorwayMFA',           # Norwegian MFA — Arctic/NATO flank
+    # ── Cross-theater (ME-Russia links) ───────────────────────────
+    'MiddleEastSpectator', # ME-Russia axis signals
 ]
 
 
@@ -150,6 +174,34 @@ def fetch_greenland_telegram_signals(hours_back=48):
                 loop.close()
     except Exception as e:
         print(f"[Telegram Greenland] ❌ fetch error: {str(e)[:200]}")
+        return []
+
+
+def fetch_russia_telegram_signals(hours_back=168):
+    """
+    Fetch Telegram signals for Russia rhetoric tracker.
+    Uses 168h (7 day) window — matches Russia tracker scan interval
+    and captures slower-moving strategic signals like nuclear/Arctic.
+    """
+    if not _telegram_available():
+        print("[Telegram Russia] Signals unavailable — skipping")
+        return []
+    try:
+        try:
+            loop = asyncio.get_running_loop()
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, _async_fetch_messages(RUSSIA_CHANNELS, hours_back))
+                return future.result(timeout=120)
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(_async_fetch_messages(RUSSIA_CHANNELS, hours_back))
+            finally:
+                loop.close()
+    except Exception as e:
+        print(f"[Telegram Russia] ❌ fetch error: {str(e)[:200]}")
         return []
 
 

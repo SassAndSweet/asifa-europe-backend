@@ -6,6 +6,7 @@ v1.0.0 -- April 2026
 ANALYTICAL FRAME:
 This tracker answers five questions simultaneously:
 
+
   1. Is Russia signaling conventional escalation on NATO's eastern flank?
      (Baltic states, Poland, Finland, Kaliningrad, Belarus)
   2. Is nuclear rhetoric coercive posturing vs. genuine doctrinal signal?
@@ -605,7 +606,16 @@ GROUND_OPS_TRIGGERS = {
         'kursk incursion russia', 'russia counterattack ukraine',
         'ukraine front pressure', 'russian artillery advance',
     ],
-    2: [
+   2: [
+        'russia ukraine front', 'ukraine fighting',
+        'ukraine battle', 'russia ukraine war',
+        'russia strikes ukraine', 'russian missile ukraine',
+        'russian drone ukraine', 'shahed ukraine',
+        'fpv drone ukraine', 'fpv attack ukraine',
+        'nikopol', 'kherson shelling', 'mykolaiv attack',
+        'russian drone kills', 'russian attack kills',
+        'russia bombs ukraine', 'russia hits civilian',
+    ], 2: [
         'russia ukraine front', 'ukraine fighting',
         'ukraine battle', 'russia ukraine war',
         'russia strikes ukraine', 'russian missile ukraine',
@@ -653,6 +663,9 @@ NATO_FLANK_TRIGGERS = {
     1: [
         'russia nato', 'nato russia', 'eastern flank',
         'nato eastern europe', 'russia europe threat',
+        'nato summit', 'nato defense', 'nato secretary',
+        'rutte nato', 'nato meeting', 'nato response',
+        'nato ukraine support', 'nato weapons ukraine',
     ],
 }
 
@@ -724,6 +737,11 @@ HYBRID_TRIGGERS = {
         'russia hybrid', 'russia cyber', 'russia energy europe',
         'russia dprk', 'russia iran', 'russia cuba',
         'russian sabotage', 'russia disinformation',
+        'north korea russia', 'iran russia weapons',
+        'russia africa', 'wagner africa',
+        'russia venezuela', 'russia nicaragua',
+        'russian spy', 'russian intelligence europe',
+        'russia shadow fleet', 'russia sanctions evade',
     ],
     1: [
         'russia hybrid', 'wagner', 'russia proxy',

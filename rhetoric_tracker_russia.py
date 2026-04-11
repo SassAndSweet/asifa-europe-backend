@@ -1424,6 +1424,14 @@ def run_russia_rhetoric_scan(force=False):
             'version':              '1.0.0',
         }
 
+        # Wire signals interpreter
+        try:
+            from russia_signal_interpreter import interpret_signals as _interpret
+            result['interpretation'] = _interpret(result)
+            print("[Russia Rhetoric] Signals interpreter complete")
+        except Exception as ie:
+            print(f"[Russia Rhetoric] Interpreter error: {str(ie)[:80]}")
+
         # Write to Redis
         _redis_set(RHETORIC_CACHE_KEY, result)
         _redis_lpush_trim(HISTORY_KEY, {

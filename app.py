@@ -62,6 +62,19 @@ except ImportError:
     GREENLAND_RHETORIC_AVAILABLE = False
     print("[Europe Backend] ⚠️ Greenland rhetoric tracker not available")
 
+# Russia rhetoric tracker + signals interpreter
+try:
+    from rhetoric_tracker_russia import (
+        register_russia_rhetoric_endpoints,
+        start_background_refresh as start_russia_rhetoric_refresh,
+    )
+    from russia_signal_interpreter import interpret_signals as russia_interpret_signals
+    RUSSIA_RHETORIC_AVAILABLE = True
+    print("[Europe Backend] ✅ Russia rhetoric tracker loaded")
+except ImportError:
+    RUSSIA_RHETORIC_AVAILABLE = False
+    print("[Europe Backend] ⚠️ Russia rhetoric tracker not available")
+
 app = Flask(__name__)
 # CORS handled by after_request handler
 
@@ -3526,7 +3539,13 @@ if UKRAINE_HUMANITARIAN_AVAILABLE:
 if GREENLAND_RHETORIC_AVAILABLE:
     register_greenland_rhetoric_routes(app)
     print("[Europe Backend] ✅ Greenland rhetoric routes registered")
-  
+
+# Register Russia rhetoric tracker
+if RUSSIA_RHETORIC_AVAILABLE:
+    register_russia_rhetoric_endpoints(app)
+    start_russia_rhetoric_refresh()
+    print("[Europe Backend] ✅ Russia rhetoric routes registered")
+
 # ========================================
 # START BACKGROUND REFRESH ON BOOT
 # ========================================

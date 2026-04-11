@@ -654,15 +654,21 @@ def _score_green_lines(scan_data):
          'ukraine negotiations', 'ukraine peace talks', 'ukraine ceasefire']
     )
     russia_pullback = _scan_articles(
-        ['russia_military', 'ukraine'],
+        ['russia_military', 'ukraine', 'russia_government'],
         ['russia withdraws', 'russia pulls back', 'russia reduces troops',
-         'russian drawdown', 'russia military reduction']
+         'russian drawdown', 'russia military reduction',
+         'putin ceasefire', 'easter ceasefire', 'russia ceasefire ukraine',
+         'putin orders halt', 'putin pause', 'russian troops halt',
+         'пасхальное перемирие', 'перемирие путин']
     )
     ukraine_openness = _scan_articles(
         ['ukraine'],
         ['zelenskyy open to talks', 'ukraine willing to negotiate',
          'ukraine ceasefire terms', 'zelenskyy peace proposal',
-         'ukraine accepts negotiations', 'ukraine peace conditions']
+         'ukraine accepts negotiations', 'ukraine peace conditions',
+         'optimistic about talks', 'talks with russia', 'peace talks russia',
+         'zelensky office optimistic', 'will not take long', 'compromise sought',
+         'us involvement talks', 'negotiations progress']
     )
     nato_russia_dialog = _scan_articles(
         ['nato_alliance', 'russia_government'],

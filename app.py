@@ -3071,7 +3071,19 @@ def _run_threat_scan(target, days=7):
     telegram_articles = []
     if TELEGRAM_AVAILABLE:
         try:
-            telegram_msgs = fetch_europe_telegram_signals(hours_back=days*24, include_extended=True)
+            # Hungary uses its own curated channel list to avoid
+            # war-heavy Europe channels bleeding into the score
+            if target == 'hungary':
+                from telegram_signals_europe import fetch_hungary_telegram_signals
+                telegram_msgs = fetch_hungary_telegram_signals(hours_back=days*24)
+            elif target == 'greenland':
+                from telegram_signals_europe import fetch_greenland_telegram_signals
+                telegram_msgs = fetch_greenland_telegram_signals(hours_back=days*24)
+            elif target == 'russia':
+                from telegram_signals_europe import fetch_russia_telegram_signals
+                telegram_msgs = fetch_russia_telegram_signals(hours_back=days*24)
+            else:
+                telegram_msgs = fetch_europe_telegram_signals(hours_back=days*24, include_extended=True)
             if telegram_msgs:
                 target_kws = [kw.lower() for kw in TARGET_KEYWORDS.get(target, {}).get('keywords', [])]
                 target_name = target.replace('_', ' ').lower()

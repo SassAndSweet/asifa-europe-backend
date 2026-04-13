@@ -119,6 +119,43 @@ GREENLAND_CHANNELS = [
     'France24_en',         # ✅ France 24 — covers Arctic/NATO stories
 ]
 
+# ── Hungary-specific channel list (v1.0.0 — April 2026) ──
+# Context: Peter Magyar / Tisza party won landslide election April 12, 2026
+# ending 16 years of Orban/Fidesz rule with a constitutional supermajority
+# (138/199 seats, 53.6% vs 37.8%). Record 77% turnout.
+#
+# Tracking signals:
+#   - Tisza transition: EU re-engagement, Ukraine unblocking, rule of law reform
+#   - Fidesz opposition: Orban pushback, far-right reaction, Russian interference
+#   - EU/Brussels response: frozen funds release, Hungary re-integration
+#   - Democratic backsliding reversal: judiciary, media freedom, corruption
+#   - Regional spillover: Slovakia tensions, ethnic Hungarian minority issues
+#
+# Note: Magyar's primary comms are Facebook/social media, not Telegram.
+# No official Tisza Telegram exists. Signals captured via European OSINT
+# and Hungarian independent media channels.
+HUNGARY_CHANNELS = [
+    # ── European OSINT / EU politics ─────────────────────────────
+    'eurointegration',      # European integration — EU institutional signals
+    'euractiv',             # Euractiv — EU politics, Hungary coverage
+    'EUvsDisinfo',          # EU vs Disinfo — Russian interference in HU election
+    'nexta_tv',             # NEXTA — covers Eastern European democratic movements
+    # ── Independent Hungarian media (English/Hungarian) ───────────
+    '444hu',                # 444.hu — Hungary's main independent news outlet
+    'telex_hu',             # Telex — leading independent Hungarian media
+    'hvg_hu',               # HVG — Hungarian independent weekly
+    # ── European political monitoring ────────────────────────────
+    'politico_eu',          # Politico Europe — EU/Hungary transition coverage
+    'France24_en',          # France 24 — covers EU institutional stories
+    'bbcrussian',           # BBC Russian — covers Eastern European transitions
+    # ── Russian reaction signals ──────────────────────────────────
+    'meduzaio',             # Meduza — Russian reaction to losing EU ally
+    'intelslava',           # Intel Slava — Russian commentary on Hungary
+    'mod_russia_en',        # Russian MoD — will react to Hungary NATO/Ukraine shift
+    # ── Regional (Slovakia tensions, ethnic HU minority) ──────────
+    'OSINTdefender',        # High-signal OSINT — catches regional spillover
+    'WarMonitors',          # War Monitor — regional Eastern Europe signals
+]
 
 # ── Russia-specific channel list (v1.2.0) ──
 # Used by rhetoric_tracker_russia.py
@@ -150,7 +187,46 @@ RUSSIA_CHANNELS = [
     'MiddleEastSpectator', # ME-Russia axis signals
 ]
 
+def fetch_hungary_telegram_signals(hours_back=120):
+    """
+    Fetch Telegram signals for Hungary stability tracker.
+    Uses 120h (5 day) window — captures transition signals
+    which move faster than Arctic/strategic but slower than
+    active warzones. Key signals to watch:
+      - Tisza transition announcements (EU re-engagement, Ukraine unblocking)
+      - Fidesz/Orban opposition reaction
+      - Russian reaction to losing primary EU ally
+      - Brussels response (frozen funds, rule of law proceedings)
+      - Slovak tensions / ethnic Hungarian minority issues
+      - Media freedom restoration signals
+      - Electoral violation dispute signals (both parties filed reports)
 
+    Context (April 12, 2026):
+      Magyar/Tisza: 138/199 seats (53.6%), constitutional supermajority
+      Orban/Fidesz: 55 seats (37.8%), heading to opposition
+      Turnout: 77% — record in post-communist Hungarian history
+    """
+    if not _telegram_available():
+        print("[Telegram Hungary] Signals unavailable — skipping")
+        return []
+    try:
+        try:
+            loop = asyncio.get_running_loop()
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, _async_fetch_messages(HUNGARY_CHANNELS, hours_back))
+                return future.result(timeout=120)
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(_async_fetch_messages(HUNGARY_CHANNELS, hours_back))
+            finally:
+                loop.close()
+    except Exception as e:
+        print(f"[Telegram Hungary] ❌ fetch error: {str(e)[:200]}")
+        return []
+        
 def fetch_greenland_telegram_signals(hours_back=48):
     """
     Fetch Telegram signals for Greenland sovereignty rhetoric tracker.

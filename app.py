@@ -435,6 +435,7 @@ TRAVEL_ADVISORY_CODES = {
     'cyprus': ['CY'],
     'azerbaijan': ['AJ'],
     'armenia': ['AM'],
+    'hungary': ['HU'],
 }
 
 TRAVEL_ADVISORY_LEVELS = {
@@ -677,6 +678,10 @@ TARGET_BASELINES = {
     'armenia': {
         'base_adjustment': +5,
         'description': 'Post-Karabakh vulnerability; Russian alliance strain; Iranian border proximity'
+    },
+    'hungary': {
+        'base_adjustment': +4,
+        'description': 'Democratic transition — Magyar/Tisza won April 2026 supermajority. Pressure signals: Fidesz opposition reaction, Russian interference, EU re-integration, rule of law reform, constitutional overhaul risk'
     }
 }
 
@@ -884,6 +889,37 @@ TARGET_KEYWORDS = {
             'Armenia', 'Yerevan', 'Pashinyan', 'Karabakh', 'Azerbaijan Armenia',
             'CSTO', 'Russia Armenia', 'Turkey Armenia', 'Iran Armenia'
         ]
+  },
+    'hungary': {
+        'keywords': [
+            # ── New government / transition ──────────────────────────────
+            'hungary', 'hungarian', 'budapest', 'peter magyar', 'péter magyar',
+            'tisza party', 'tisza', 'fidesz', 'orban', 'orbán', 'viktor orban',
+            'magyar wins', 'magyar election', 'orban concedes',
+            'hungarian election', 'hungary election 2026',
+            'hungary eu', 'hungary nato', 'hungary russia',
+            # ── Democratic transition signals ────────────────────────────
+            'hungary democracy', 'hungary rule of law', 'hungary corruption',
+            'hungary judiciary', 'hungary media freedom', 'hungary press freedom',
+            'hungary constitution', 'hungary constitutional reform',
+            'hungary eu funds', 'hungary frozen funds', 'hungary brussels',
+            # ── Fidesz / Orban opposition signals ────────────────────────
+            'fidesz opposition', 'orban opposition', 'fidesz reaction',
+            'hungary far right', 'hungary illiberal', 'orban legacy',
+            # ── Russian interference / geopolitical shift ─────────────────
+            'russia hungary', 'hungary russia putin', 'hungary ukraine war',
+            'hungary ukraine aid', 'orban putin', 'hungary kremlin',
+            'russian interference hungary', 'hungary propaganda',
+            # ── Regional / EU signals ────────────────────────────────────
+            'hungary slovakia', 'ethnic hungarian', 'transylvania',
+            'hungary poland', 'visegrad', 'hungary economy',
+            'forint', 'hungarian forint',
+        ],
+        'reddit_keywords': [
+            'Hungary', 'Budapest', 'Magyar', 'Orban', 'Tisza',
+            'Fidesz', 'Hungarian election', 'Hungary EU', 'Hungary democracy',
+            'Hungary Russia', 'Hungarian politics'
+        ]
     }
 }
 
@@ -899,7 +935,8 @@ REDDIT_SUBREDDITS = {
     'turkey': ['Turkey', 'turkish', 'europe', 'geopolitics', 'worldnews', 'syriancivilwar'],
     'cyprus': ['cyprus', 'europe', 'geopolitics', 'worldnews', 'unitedkingdom'],
     'azerbaijan': ['azerbaijan', 'europe', 'geopolitics', 'worldnews', 'CredibleDefense'],
-    'armenia': ['armenia', 'europe', 'geopolitics', 'worldnews', 'CredibleDefense', 'ArmeniaAzerbaijan']
+    'armenia': ['armenia', 'europe', 'geopolitics', 'worldnews', 'CredibleDefense', 'ArmeniaAzerbaijan'],
+    'hungary': ['hungary', 'europe', 'geopolitics', 'worldnews', 'europeanunion']
 }
 
 # ========================================
@@ -2993,6 +3030,31 @@ def _run_threat_scan(target, days=7):
             except Exception as e:
                 print(f"Cyprus GDELT error: {e}")
 
+    if target == 'hungary':
+        try:
+            rss_articles.extend(fetch_google_news_rss(
+                'Hungary election Magyar Orban Tisza Fidesz democracy',
+                'Hungary News'))
+        except Exception as e:
+            print(f"Hungary Google News error: {e}")
+
+        # Hungary-specific GDELT queries — transition + Russian reaction
+        hungary_queries = [
+            ('Hungary Magyar Tisza election victory', 'eng'),
+            ('Orban Fidesz concedes Hungary democracy', 'eng'),
+            ('Hungary EU funds frozen democracy rule law', 'eng'),
+            ('Hungary Russia Ukraine war policy change', 'eng'),
+            ('Hungarian election interference Russia', 'eng'),
+            ('Magyarország választás Tisza Fidesz', 'hun'),
+            ('Magyar Péter kormány EU demokrácia', 'hun'),
+        ]
+        for query, lang in hungary_queries:
+            try:
+                articles = fetch_gdelt_articles(query, days, lang)
+                rss_articles.extend(articles)
+            except Exception as e:
+                print(f"Hungary GDELT ({lang}) error: {e}")
+
     telegram_articles = []
     if TELEGRAM_AVAILABLE:
         try:
@@ -3514,6 +3576,18 @@ def api_europe_articles_russia():
     except Exception as e:
         return jsonify({'success': False, 'articles': [], 'error': str(e)}), 500
       
+@app.route('/api/europe/articles/hungary', methods=['GET'])
+def api_europe_articles_hungary():
+    """Recent Hungary articles for hungary.html article feed."""
+    try:
+        cached = cache_get('threat_hungary_7d')
+        if cached:
+            articles = cached.get('articles_en', [])[:20]
+            return jsonify({'success': True, 'articles': articles})
+        return jsonify({'success': False, 'articles': [], 'error': 'No cache yet'})
+    except Exception as e:
+        return jsonify({'success': False, 'articles': [], 'error': str(e)}), 500
+
 @app.route('/api/europe/cache-status', methods=['GET'])
 def api_cache_status():
     """

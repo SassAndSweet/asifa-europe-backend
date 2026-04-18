@@ -53,15 +53,6 @@ except ImportError:
     UKRAINE_HUMANITARIAN_AVAILABLE = False
     print("[Europe Backend] ⚠️ Ukraine humanitarian module not available")
 
-# Military posture tracker (read-only on Europe — ME backend is the primary scanner)
-try:
-    from military_tracker import register_military_endpoints
-    MILITARY_TRACKER_AVAILABLE = True
-    print("[Europe Backend] ✅ Military tracker loaded (read-only mode)")
-except ImportError as e:
-    MILITARY_TRACKER_AVAILABLE = False
-    print(f"[Europe Backend] ⚠️ Military tracker not available: {e}")
-  
 # Greenland sovereignty rhetoric tracker
 try:
     from rhetoric_tracker_greenland import register_greenland_rhetoric_routes
@@ -3579,14 +3570,77 @@ if RUSSIA_STABILITY_AVAILABLE:
     register_russia_stability_endpoints(app)
     print("[Europe Backend] ✅ Russia stability routes registered")
 
-# Register Military tracker endpoints (READ-ONLY on Europe backend)
-# Europe serves military-posture data from Redis (populated by ME backend)
-# start_background=False skips the periodic scan thread to avoid
-# duplicating the work ME is already doing.
-if MILITARY_TRACKER_AVAILABLE:
-    register_military_endpoints(app, start_background=False)
-    print("[Europe Backend] ✅ Military tracker endpoints registered (read-only)")
-  
+# ========================================
+# MILITARY POSTURE PROXY (v1.0.0 — April 2026)
+# ========================================
+# Europe backend doesn't scan military posture itself — that's ME's job.
+# This endpoint proxies requests to ME backend, which has military_tracker.py
+# installed and runs the periodic scans. Benefits:
+#   - Single source of truth for military_tracker.py (lives on ME only)
+#   - No duplicate scans across backends
+#   - No memory pressure on Europe from military scanning
+#   - Frontend code is identical regardless of region (both hit Europe)
+ME_BACKEND_URL = 'https://asifah-backend.onrender.com'
+MILITARY_PROXY_TIMEOUT = 10  # seconds
+MILITARY_PROXY_CACHE_TTL = 600  # cache ME responses locally for 10 min
+_military_proxy_cache = {}  # {target: (timestamp, data)}
+
+
+def _military_proxy_safe_default(error_msg=None):
+    """Safe-default response when ME is unreachable — keeps frontend from breaking."""
+    resp = {
+        'alert_level': 'normal',
+        'alert_label': 'Normal',
+        'alert_color': 'green',
+        'military_bonus': 0,
+        'show_banner': False,
+        'banner_text': '',
+        'top_signals': [],
+    }
+    if error_msg:
+        resp['_proxy_error'] = error_msg
+    return resp
+
+
+@app.route('/api/military-posture/<target>', methods=['GET', 'OPTIONS'])
+@cross_origin()
+def military_posture_proxy(target):
+    """
+    Proxy: forward military-posture requests to ME backend.
+    ME is where military_tracker.py lives and runs scans.
+    Europe caches ME's response briefly to reduce cross-backend traffic.
+    """
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    # Check local proxy cache
+    now = time.time()
+    cached = _military_proxy_cache.get(target)
+    if cached and (now - cached[0] < MILITARY_PROXY_CACHE_TTL):
+        resp = dict(cached[1])
+        resp['_proxy_cache'] = True
+        resp['_proxy_cache_age_s'] = int(now - cached[0])
+        return jsonify(resp)
+
+    # Fetch from ME backend
+    try:
+        me_url = f'{ME_BACKEND_URL}/api/military-posture/{target}'
+        r = requests.get(me_url, timeout=MILITARY_PROXY_TIMEOUT)
+        if r.status_code != 200:
+            print(f"[Military Proxy] {target}: ME returned HTTP {r.status_code}")
+            return jsonify(_military_proxy_safe_default(f'ME backend returned {r.status_code}')), 200
+        data = r.json()
+        _military_proxy_cache[target] = (now, data)
+        data['_proxy_cache'] = False
+        return jsonify(data)
+    except requests.exceptions.Timeout:
+        print(f"[Military Proxy] {target}: ME backend timeout")
+        return jsonify(_military_proxy_safe_default('ME backend timeout')), 200
+    except Exception as e:
+        print(f"[Military Proxy] {target}: {str(e)[:100]}")
+        return jsonify(_military_proxy_safe_default(str(e)[:100])), 200
+
+
 # ========================================
 # START BACKGROUND REFRESH ON BOOT
 # ========================================

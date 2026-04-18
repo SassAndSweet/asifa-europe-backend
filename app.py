@@ -53,6 +53,15 @@ except ImportError:
     UKRAINE_HUMANITARIAN_AVAILABLE = False
     print("[Europe Backend] ⚠️ Ukraine humanitarian module not available")
 
+# Military posture tracker (read-only on Europe — ME backend is the primary scanner)
+try:
+    from military_tracker import register_military_endpoints
+    MILITARY_TRACKER_AVAILABLE = True
+    print("[Europe Backend] ✅ Military tracker loaded (read-only mode)")
+except ImportError as e:
+    MILITARY_TRACKER_AVAILABLE = False
+    print(f"[Europe Backend] ⚠️ Military tracker not available: {e}")
+  
 # Greenland sovereignty rhetoric tracker
 try:
     from rhetoric_tracker_greenland import register_greenland_rhetoric_routes
@@ -3570,6 +3579,14 @@ if RUSSIA_STABILITY_AVAILABLE:
     register_russia_stability_endpoints(app)
     print("[Europe Backend] ✅ Russia stability routes registered")
 
+# Register Military tracker endpoints (READ-ONLY on Europe backend)
+# Europe serves military-posture data from Redis (populated by ME backend)
+# start_background=False skips the periodic scan thread to avoid
+# duplicating the work ME is already doing.
+if MILITARY_TRACKER_AVAILABLE:
+    register_military_endpoints(app, start_background=False)
+    print("[Europe Backend] ✅ Military tracker endpoints registered (read-only)")
+  
 # ========================================
 # START BACKGROUND REFRESH ON BOOT
 # ========================================

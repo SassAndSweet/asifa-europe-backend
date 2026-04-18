@@ -2388,18 +2388,6 @@ def extract_casualty_data(articles):
 
     return casualties
 
-
-# Bluesky — executive & government statement monitor (v1.0.0, April 2026)
-    # Replacement for the deprecated Nitter path. Uses Bluesky's public API
-    # (no auth required) + govmirrors.com mirrors of X accounts.
-    nitter_articles = []  # kept as variable name for downstream compatibility
-    try:
-        from bluesky_signals_europe import fetch_bluesky_for_target
-        nitter_articles = fetch_bluesky_for_target(target, days=days)
-    except Exception as e:
-        print(f"[Europe Scan] Bluesky error: {str(e)[:100]}")
-
-
 # ========================================
 # NOTAM SCANNING — FAA NOTAM Search (v1.4.0)
 # Worldwide coverage, free, no API key required
@@ -2970,12 +2958,16 @@ def _run_threat_scan(target, days=7):
             print(f"[Europe Scan] Telegram error: {str(e)[:100]}")
 
 
-    # Nitter — executive & government statement monitor (v1.5.0)
+    # Bluesky — executive & government statement monitor (v1.0.0, April 2026)
+    # Replaces deprecated Nitter path. Uses Bluesky's public API + govmirrors.com
+    # mirrors of X accounts. Variable still named nitter_articles for
+    # downstream compatibility (minimizes changes elsewhere).
     nitter_articles = []
     try:
-        nitter_articles = fetch_nitter_for_target(target, days=days)
+        from bluesky_signals_europe import fetch_bluesky_for_target
+        nitter_articles = fetch_bluesky_for_target(target, days=days)
     except Exception as e:
-        print(f"[Europe Scan] Nitter error: {str(e)[:100]}")
+        print(f"[Europe Scan] Bluesky error: {str(e)[:100]}")
 
     all_articles = (articles_en + articles_gdelt_en + articles_gdelt_ru +
                    articles_gdelt_fr + articles_gdelt_uk + articles_reddit +

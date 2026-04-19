@@ -533,6 +533,60 @@ ACTORS = {
             'lukashenko authorizes attack',
         ],
     },
+
+    # ============================================
+    # v1.1.0 (April 2026) — Russia-Iran Axis actor
+    # Split from generic hybrid vector into dedicated actor
+    # for accurate attribution. Mirrors the China-Iran split
+    # on the Iran tracker. Russia's role is distinct from China's:
+    # Russia = launch partner, strategic arms, intelligence sharing.
+    # China = ISR enabler, dual-use logistics. Both real, different.
+    # ============================================
+    'russia_iran_axis': {
+        'name': 'Russia → Iran (Axis Support)',
+        'flag': '🇮🇷',
+        'icon': '🚀',
+        'color': '#dc2626',
+        'role': 'External Support to Iran — Launch / Arms / Coordination',
+        'description': (
+            'Russia as active supporter of Iran. '
+            'Sub-categorized across: launch partnership (Russian rockets '
+            'carrying Iranian satellites), arms transfers, intelligence '
+            'sharing (incl. satellite targeting data for IRGC strikes on '
+            'US installations), and strategic coordination. '
+            'Watch for: Russian targeting-data allegations, joint defense '
+            'announcements, Iranian satellite launches via Soyuz.'
+        ),
+        'keywords': [
+            # Launch partnership / space
+            'russia launches iranian satellite', 'russian rocket iran',
+            'russia iran satellite launch', 'soyuz iran satellite',
+            'iranian satellite russian launch', 'noor russia launch',
+            # Intelligence / targeting
+            'russia satellite iran', 'russia targeting iran',
+            'russia intelligence iran', 'russia iran targeting us',
+            'russian targeting data iran', 'russia satellite irgc',
+            # Arms / hardware
+            'russia arms iran', 'russia weapons iran',
+            'russia supplies iran', 'russian s-400 iran',
+            'russian jets iran', 'sukhoi iran', 'russia air defense iran',
+            # Strategic coordination
+            'moscow tehran military', 'russia iran defense pact',
+            'russia backs iran war', 'russia iran cooperation war',
+            'comprehensive partnership iran russia',
+            'russia iran military coordination',
+            # Cross-language
+            'روسيا تدعم إيران', 'روسیه ایران حمایت',
+            'پرتاب ماهواره ایرانی روسیه',
+        ],
+        'baseline_statements_per_week': 3,
+        'tripwires': [
+            'russia launches iranian spy satellite',
+            'russia provides targeting data iran strike',
+            'russia delivers s-400 iran',
+            'russia iran defense pact signed',
+        ],
+    },
 }
 
 
@@ -1368,6 +1422,9 @@ def _write_crosstheater_fingerprint(actor_results, vectors):
     arc_level, _ = vectors.get('arctic',     (0, None))
     hyb_level, _ = vectors.get('hybrid',     (0, None))
 
+    # v1.1.0 — Russia-Iran axis level from dedicated actor
+    russia_iran_level = actor_results.get('russia_iran_axis', {}).get('escalation_level', 0)
+
     fingerprint = {
         'russia': {
             'updated_at':          datetime.now(timezone.utc).isoformat(),
@@ -1379,8 +1436,14 @@ def _write_crosstheater_fingerprint(actor_results, vectors):
             'arctic_level':          arc_level,
             'hybrid_level':          hyb_level,
             'belarus_level':         actor_results.get('belarus',          {}).get('escalation_level', 0),
-            # Cross-theater coordination signals
-            'iran_russia_active':    hyb_level >= 3,
+            # ── v1.1.0 Russia-Iran axis (April 2026) ──
+            # Written from Russia's perspective: what Russia is DOING.
+            # Severity level (0-5) from dedicated russia_iran_axis actor:
+            'russia_iran_perspective_level': russia_iran_level,
+            # Cross-theater coordination signals (binary flags preserved):
+            # iran_russia_active now prefers the dedicated axis actor level
+            # over the generic hybrid vector — axis actor is the canonical signal.
+            'iran_russia_active':    russia_iran_level >= 2 or hyb_level >= 3,
             'dprk_russia_active':    hyb_level >= 3,
             'arctic_elevated':       arc_level >= 3,
             'nuclear_signaling':     nuc_level >= 3,

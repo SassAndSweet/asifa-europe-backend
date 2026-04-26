@@ -84,6 +84,21 @@ except ImportError as e:
     RUSSIA_STABILITY_AVAILABLE = False
     print(f"[Europe Backend] ⚠️ Russia stability not available: {e}")
 
+# v1.0: Europe Regional BLUF Engine
+# Synthesizes top_signals[] across Russia + Greenland (and future Ukraine/Hungary/Poland trackers).
+# Required for Global Pressure Index downstream consumption.
+try:
+    from europe_regional_bluf import register_europe_bluf_routes
+    EUROPE_BLUF_AVAILABLE = True
+    print("[Europe Backend] ✅ Europe regional BLUF loaded")
+except Exception as e:
+    import traceback
+    EUROPE_BLUF_AVAILABLE = False
+    print(f"[Europe Backend] ⚠️ Europe regional BLUF not available — {type(e).__name__}: {e}")
+    print("[Europe Backend] === EUROPE BLUF IMPORT TRACEBACK ===")
+    traceback.print_exc()
+    print("[Europe Backend] === END EUROPE BLUF IMPORT TRACEBACK ===")
+
 # Weather bundle (replaces 9 frontend open-meteo calls with 1 cached backend call)
 try:
     from europe_weather_bundle import (
@@ -3581,6 +3596,11 @@ if RUSSIA_RHETORIC_AVAILABLE:
 if RUSSIA_STABILITY_AVAILABLE:
     register_russia_stability_endpoints(app)
     print("[Europe Backend] ✅ Russia stability routes registered")
+
+# Register Europe Regional BLUF (synthesizes Russia + Greenland for GPI consumption)
+if EUROPE_BLUF_AVAILABLE:
+    register_europe_bluf_routes(app)
+    print("[Europe Backend] ✅ Europe regional BLUF routes registered")
 
 # Register Weather bundle endpoint + start background refresh
 if WEATHER_BUNDLE_AVAILABLE:

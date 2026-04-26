@@ -853,3 +853,214 @@ if __name__ == '__main__':
     print('\nHISTORICAL MATCHES:')
     for hm in result['historical_matches']:
         print(f'  {hm["similarity"]}% -- {hm["label"]} | Confidence: {hm["confidence"]}')
+
+
+# ============================================================
+# v2.0+ — TOP SIGNALS (BLUF / GPI consumable)
+# ============================================================
+# Greenland is an INVERTED-rhetoric tracker — the threat language is
+# inbound from the US, not outbound from Greenland. Categories reflect
+# this asymmetry: us_pressure_high (escalation), nato_cohesion_risk,
+# russia_exploiting (cross-theater opportunism), sovereignty_crisis.
+
+GREENLAND_FLAG = '\U0001f1ec\U0001f1f1'  # 🇬🇱
+
+def build_top_signals(scan_data):
+    """
+    Build Greenland's top_signals[] for BLUF/GPI consumption.
+    Greenland tracker writes interpreter output under 'interpretation' (ME pattern).
+    Returns sorted list (descending priority).
+    """
+    signals = []
+
+    # ME pattern: interpreter output lives under 'interpretation' wrapper
+    interp = scan_data.get('interpretation', {}) or {}
+    so_what   = interp.get('so_what', {}) or {}
+    red_lines = interp.get('red_lines', {}) or {}
+
+    # Theatre-level fields at top of scan_data
+    theatre_level = scan_data.get('theatre_level', 0) or 0
+    theatre_score = scan_data.get('theatre_score', 0) or 0
+
+    # Actor levels
+    us_level        = scan_data.get('us_pressure_level', 0) or 0
+    greenland_level = scan_data.get('greenland_level', 0) or 0
+    denmark_level   = scan_data.get('denmark_level', 0) or 0
+    russia_level    = scan_data.get('russia_level', 0) or 0
+
+    # Special signals
+    convergence_signal = scan_data.get('convergence_signal', '') or ''
+    defence_intensity  = scan_data.get('defence_intensity', 0) or 0
+    russia_opportunism = scan_data.get('russia_opportunism', 0) or 0
+
+    # Red lines
+    rl_triggered = red_lines.get('triggered', []) or []
+    breached = [r for r in rl_triggered if isinstance(r, dict) and r.get('status') == 'BREACHED']
+    approaching = [r for r in rl_triggered if isinstance(r, dict) and r.get('status') == 'APPROACHING']
+
+    # ============================================
+    # 1. RED LINES BREACHED
+    # ============================================
+    for rl in breached[:3]:
+        label    = rl.get('label', 'Sovereignty red line')
+        severity = rl.get('severity', 5) or 5
+        signals.append({
+            'priority':   12,
+            'category':   'red_line_breached',
+            'theatre':    'greenland',
+            'level':      max(theatre_level, 4),
+            'icon':       rl.get('icon', '🚨'),
+            'color':      '#dc2626',
+            'short_text': f'{GREENLAND_FLAG} GREENLAND: BREACH — {label[:55]}',
+            'long_text':  f'GREENLAND sovereignty red line breached (severity {severity}): {label}',
+        })
+
+    for rl in approaching[:2]:
+        label = rl.get('label', 'Sovereignty red line')
+        signals.append({
+            'priority':   8,
+            'category':   'red_line_approaching',
+            'theatre':    'greenland',
+            'level':      theatre_level,
+            'icon':       '🟠',
+            'color':      '#f97316',
+            'short_text': f'{GREENLAND_FLAG} GREENLAND: Approaching — {label[:50]}',
+            'long_text':  f'GREENLAND approaching red line: {label}',
+        })
+
+    # ============================================
+    # 2. THEATRE-HIGH (sovereignty crisis at L3+)
+    # ============================================
+    if theatre_level >= 4:
+        signals.append({
+            'priority':   9 + theatre_level,
+            'category':   'theatre_high',
+            'theatre':    'greenland',
+            'level':      theatre_level,
+            'icon':       '🔴',
+            'color':      '#dc2626' if theatre_level >= 5 else '#ef4444',
+            'short_text': f'{GREENLAND_FLAG} GREENLAND L{theatre_level} — Sovereignty crisis',
+            'long_text':  f'GREENLAND at L{theatre_level} sovereignty crisis (score {theatre_score}/100). '
+                          f'Inbound US pressure L{us_level}, Russia opportunism L{russia_level}.',
+        })
+    elif theatre_level >= 3:
+        signals.append({
+            'priority':   8,
+            'category':   'theatre_high',
+            'theatre':    'greenland',
+            'level':      theatre_level,
+            'icon':       '🟠',
+            'color':      '#f97316',
+            'short_text': f'{GREENLAND_FLAG} GREENLAND L{theatre_level} — Sovereignty pressure',
+            'long_text':  f'GREENLAND at L{theatre_level} sovereignty pressure (score {theatre_score}/100). '
+                          f'US rhetoric L{us_level} vs. Greenland posture L{greenland_level}.',
+        })
+
+    # ============================================
+    # 3. US PRESSURE HIGH (Greenland's KEY inbound signal)
+    # ============================================
+    if us_level >= 4:
+        signals.append({
+            'priority':   11,
+            'category':   'us_pressure_high',
+            'theatre':    'greenland',
+            'level':      us_level,
+            'icon':       '🦅',
+            'color':      '#dc2626',
+            'short_text': f'{GREENLAND_FLAG} GREENLAND: US pressure L{us_level}',
+            'long_text':  f'GREENLAND inbound US sovereignty pressure L{us_level} — explicit acquisition '
+                          f'or coercive language from the US administration.',
+        })
+    elif us_level >= 3:
+        signals.append({
+            'priority':   8,
+            'category':   'us_pressure_high',
+            'theatre':    'greenland',
+            'level':      us_level,
+            'icon':       '🦅',
+            'color':      '#f97316',
+            'short_text': f'{GREENLAND_FLAG} GREENLAND: US pressure L{us_level}',
+            'long_text':  f'GREENLAND inbound US pressure L{us_level} — direct rhetoric from US administration.',
+        })
+
+    # ============================================
+    # 4. NATO COHESION RISK / ALLIANCE FRACTURE
+    # ============================================
+    nato_risk = so_what.get('nato_cohesion_risk', False)
+    alliance_fracture = so_what.get('alliance_fracture_risk', False)
+    if nato_risk or alliance_fracture:
+        signals.append({
+            'priority':   10,
+            'category':   'nato_cohesion_risk',
+            'theatre':    'greenland',
+            'level':      max(us_level, denmark_level, 3),
+            'icon':       '⚠️',
+            'color':      '#dc2626',
+            'short_text': f'{GREENLAND_FLAG} GREENLAND: NATO cohesion at risk',
+            'long_text':  f'GREENLAND NATO cohesion risk active — US-Denmark alliance friction over '
+                          f'Greenland sovereignty signals could fracture allied posture.',
+        })
+    elif denmark_level >= 3:
+        signals.append({
+            'priority':   6,
+            'category':   'denmark_pushback',
+            'theatre':    'greenland',
+            'level':      denmark_level,
+            'icon':       '🇩🇰',
+            'color':      '#3b82f6',
+            'short_text': f'{GREENLAND_FLAG} GREENLAND: Denmark pushback L{denmark_level}',
+            'long_text':  f'GREENLAND: Denmark sovereignty defense L{denmark_level} — Copenhagen '
+                          f'asserting sovereignty against US pressure.',
+        })
+
+    # ============================================
+    # 5. RUSSIA EXPLOITATION (cross-theater opportunism)
+    # ============================================
+    russia_exploiting = so_what.get('russia_exploiting', False)
+    if russia_exploiting or russia_level >= 3:
+        signals.append({
+            'priority':   9,
+            'category':   'russia_exploiting',
+            'theatre':    'greenland',
+            'level':      max(russia_level, 3),
+            'icon':       '🇷🇺',
+            'color':      '#7c3aed',
+            'short_text': f'{GREENLAND_FLAG} GREENLAND: Russia exploiting Arctic L{russia_level}',
+            'long_text':  f'GREENLAND: Russia exploiting US-Greenland friction L{russia_level} — '
+                          f'GIUK gap, Northern Fleet posture, or sub-cable interference signaling.',
+        })
+
+    # ============================================
+    # 6. GREENLAND POSTURE (defensive sovereignty)
+    # ============================================
+    if greenland_level >= 4:
+        signals.append({
+            'priority':   8,
+            'category':   'greenland_posture',
+            'theatre':    'greenland',
+            'level':      greenland_level,
+            'icon':       '🛡️',
+            'color':      '#3b82f6',
+            'short_text': f'{GREENLAND_FLAG} GREENLAND: Sovereignty posture L{greenland_level}',
+            'long_text':  f'GREENLAND defensive sovereignty rhetoric L{greenland_level} — Nuuk asserting '
+                          f'self-determination, possible election or referendum signals.',
+        })
+
+    # ============================================
+    # 7. CONVERGENCE SIGNAL (special semantic flag)
+    # ============================================
+    if convergence_signal:
+        signals.append({
+            'priority':   7,
+            'category':   'convergence_signal',
+            'theatre':    'greenland',
+            'level':      theatre_level,
+            'icon':       '📡',
+            'color':      '#f59e0b',
+            'short_text': f'{GREENLAND_FLAG} GREENLAND: {convergence_signal[:55]}',
+            'long_text':  f'GREENLAND convergence: {convergence_signal}',
+        })
+
+    # Sort descending; BLUF will dedupe + globally rank
+    signals.sort(key=lambda s: s['priority'], reverse=True)
+    return signals

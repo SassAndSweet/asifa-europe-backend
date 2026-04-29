@@ -3315,6 +3315,17 @@ def api_europe_threat(target):
     """
     Main threat assessment endpoint for European targets.
     Returns cached data by default. Pass ?force=true to trigger a fresh OSINT scan.
+
+    v1.2.0 (Apr 29 2026) — ARCHITECTURAL FIX:
+      Page-load calls (force=false) NEVER trigger fresh scans on cache miss.
+      If both in-memory and Redis cache are empty, returns a placeholder
+      response with pending_scan=True so the frontend can show a sensible
+      loading state. The background refresh daemon will populate the cache
+      asynchronously, and the manual Scan OSINT button (which sends force=true)
+      remains the only path that triggers an inline fresh scan.
+
+      Bug surfaced when Belarus was added with empty cache and per-target
+      calls hung for 10 minutes during page load.
     """
     try:
         force = request.args.get('force', 'false').lower() == 'true'
@@ -3345,7 +3356,28 @@ def api_europe_threat(target):
                 redis_cached['cache_age_human'] = 'from redis'
                 cache_set(cache_key, redis_cached)  # Warm in-memory
                 return jsonify(redis_cached)
-        # Fresh scan required — check rate limit
+
+            # ── v1.2.0 FAST PATH ─────────────────────────────────────────
+            # No cache anywhere. Page load must NOT block on a fresh scan.
+            # Return placeholder so the frontend can render the card with a
+            # graceful "Awaiting first scan" state. The background refresh
+            # daemon will populate cache; user can click Scan OSINT to force.
+            return jsonify({
+                'success': True,
+                'target': target,
+                'probability': None,
+                'momentum': 'unknown',
+                'timeline': 'Awaiting first scan',
+                'confidence': 'No data',
+                'total_articles': 0,
+                'cached': False,
+                'pending_scan': True,
+                'cache_age_seconds': None,
+                'cache_age_human': 'no cache yet',
+                'message': 'Cache empty. Click Scan OSINT to trigger a fresh scan, or wait for the background refresh daemon.'
+            }), 200
+        # ── FORCE PATH ───────────────────────────────────────────────────
+        # Manual Scan OSINT button. Run fresh scan inline as before.
         if not check_rate_limit():
             return jsonify({
                 'success': False,
@@ -3379,9 +3411,19 @@ def api_europe_threat(target):
 @app.route('/api/europe/dashboard', methods=['GET'])
 def api_europe_dashboard():
     """
-    Single batch endpoint — returns all 4 country scores in one response.
-    Dramatically reduces frontend round trips from 4 to 1.
-    Returns cached data by default. Pass ?force=true to trigger fresh scans.
+    Single batch endpoint — returns all country scores in one response.
+    Dramatically reduces frontend round trips.
+
+    v1.2.0 (Apr 29 2026) — ARCHITECTURAL FIX:
+      Page-load calls (force=false) NEVER trigger fresh scans on cache miss.
+      Cache miss returns placeholder with cached=False; the background refresh
+      daemon will populate the cache asynchronously. This restores the
+      architectural rule: "Scan OSINT must be a deliberate user action, never
+      a side effect of viewing the page." Bug surfaced when Belarus was added
+      with empty cache and dashboard load took 10 minutes.
+
+      Pass ?force=true to trigger fresh scans for missing entries (used by
+      manual refresh / admin tooling, not page load).
     """
     try:
         force = request.args.get('force', 'false').lower() == 'true'
@@ -3391,33 +3433,54 @@ def api_europe_dashboard():
         dashboard = {
             'success': True,
             'timestamp': datetime.now(timezone.utc).isoformat(),
-            'version': '1.1.0-europe',
+            'version': '1.2.0-europe',
             'countries': {}
         }
 
         all_cached = True
+        pending_scan_targets = []
 
         for target in targets:
             cache_key = f'threat_{target}_{days}d'
+            cached = cache_get(cache_key)
+
+            if cached:
+                # Cache hit — return collapsed summary for dashboard
+                dashboard['countries'][target] = {
+                    'probability': cached.get('probability', 0),
+                    'momentum': cached.get('momentum', 'stable'),
+                    'timeline': cached.get('timeline', 'Unknown'),
+                    'confidence': cached.get('confidence', 'Low'),
+                    'total_articles': cached.get('total_articles', 0),
+                    'flight_disruptions': len(cached.get('flight_disruptions', [])),
+                    'cached': True,
+                    'cache_age_seconds': int(cache_age(cache_key) or 0)
+                }
+                continue
+
+            # Cache miss path
+            all_cached = False
+            pending_scan_targets.append(target)
 
             if not force:
-                cached = cache_get(cache_key)
-                if cached:
-                    # Return collapsed summary for dashboard
-                    dashboard['countries'][target] = {
-                        'probability': cached.get('probability', 0),
-                        'momentum': cached.get('momentum', 'stable'),
-                        'timeline': cached.get('timeline', 'Unknown'),
-                        'confidence': cached.get('confidence', 'Low'),
-                        'total_articles': cached.get('total_articles', 0),
-                        'flight_disruptions': len(cached.get('flight_disruptions', [])),
-                        'cached': True,
-                        'cache_age_seconds': int(cache_age(cache_key) or 0)
-                    }
-                    continue
+                # FAST PATH (page load): return placeholder, do NOT scan inline.
+                # Background refresh daemon will populate cache; user can also
+                # trigger a manual scan via the per-card Scan OSINT button.
+                dashboard['countries'][target] = {
+                    'probability': None,
+                    'momentum': 'unknown',
+                    'timeline': 'Awaiting first scan',
+                    'confidence': 'No data',
+                    'total_articles': 0,
+                    'flight_disruptions': 0,
+                    'cached': False,
+                    'cache_age_seconds': None,
+                    'pending_scan': True
+                }
+                continue
 
-            # Cache miss — run fresh scan
-            all_cached = False
+            # FORCE PATH (manual refresh): run fresh scan inline as before.
+            # This path is opt-in only — page loads never reach this branch.
             if not check_rate_limit():
                 dashboard['countries'][target] = {
                     'probability': 0,
@@ -3441,6 +3504,8 @@ def api_europe_dashboard():
             }
 
         dashboard['all_cached'] = all_cached
+        if pending_scan_targets and not force:
+            dashboard['pending_scan_targets'] = pending_scan_targets
 
         return jsonify(dashboard)
 
@@ -3588,6 +3653,42 @@ def api_europe_articles_hungary():
         return jsonify({'success': False, 'articles': [], 'error': 'No cache yet'})
     except Exception as e:
         return jsonify({'success': False, 'articles': [], 'error': str(e)}), 500
+
+@app.route('/api/europe/articles/belarus', methods=['GET'])
+def api_europe_articles_belarus():
+    """Recent Belarus articles for belarus-stability.html article feed.
+    v1.0.0 (Apr 29 2026) — mirrors hungary endpoint pattern."""
+    try:
+        cached = cache_get('threat_belarus_7d')
+        if cached:
+            articles = cached.get('articles_en', [])[:20]
+            return jsonify({'success': True, 'articles': articles})
+        return jsonify({'success': False, 'articles': [], 'error': 'No cache yet'})
+    except Exception as e:
+        return jsonify({'success': False, 'articles': [], 'error': str(e)}), 500
+
+@app.route('/debug/routes', methods=['GET'])
+def debug_routes():
+    """
+    v1.0.0 (Apr 29 2026) — Diagnostic endpoint listing all registered Flask
+    routes. Per project memory: 'Asia backend /debug/routes saved 2hr Taiwan
+    405 debug after content-vs-filename mismatch'. Permanent canonical hygiene
+    check across all Asifah backends.
+    """
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods':  sorted([m for m in rule.methods if m not in ('HEAD', 'OPTIONS')]),
+            'rule':     str(rule),
+        })
+    routes.sort(key=lambda r: r['rule'])
+    return jsonify({
+        'success':       True,
+        'route_count':   len(routes),
+        'targets_known': sorted(list(TARGET_KEYWORDS.keys())),
+        'routes':        routes,
+    })
 
 @app.route('/api/europe/cache-status', methods=['GET'])
 def api_cache_status():

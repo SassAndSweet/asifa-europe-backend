@@ -3444,6 +3444,18 @@ def api_europe_dashboard():
             cache_key = f'threat_{target}_{days}d'
             cached = cache_get(cache_key)
 
+            # ── v1.2.1 FIX (Apr 29 2026) ────────────────────────────────
+            # If in-memory cache is empty, check Redis. In-memory cache resets
+            # on every deploy/restart, so without this fallback, dashboard
+            # returns pending_scan for ALL countries after each deploy until
+            # each one is re-scanned. Mirrors per-target endpoint pattern
+            # (lines 3340-3347 above).
+            if not cached:
+                is_fresh, redis_cached = is_threat_cache_fresh_redis(target, days)
+                if is_fresh and redis_cached:
+                    cache_set(cache_key, redis_cached)  # warm in-memory
+                    cached = redis_cached
+
             if cached:
                 # Cache hit — return collapsed summary for dashboard
                 dashboard['countries'][target] = {

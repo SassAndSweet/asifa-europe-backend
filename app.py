@@ -111,6 +111,15 @@ except ImportError as e:
     WEATHER_BUNDLE_AVAILABLE = False
     print(f"[Europe Backend] ⚠️ Weather bundle not available: {e}")
 
+# Commodity proxy — pulls from ME backend, caches locally with 12hr TTL
+try:
+    from commodity_proxy_europe import register_commodity_proxy
+    COMMODITY_PROXY_AVAILABLE = True
+    print("[Europe Backend] ✅ Commodity proxy module loaded")
+except ImportError as e:
+    COMMODITY_PROXY_AVAILABLE = False
+    print(f"[Europe Backend] ⚠️ Commodity proxy not available: {e}")
+
 app = Flask(__name__)
 # CORS handled by after_request handler
 
@@ -3815,6 +3824,11 @@ if WEATHER_BUNDLE_AVAILABLE:
     register_weather_endpoints(app)
     start_weather_refresh()
     print("[Europe Backend] ✅ Weather bundle routes registered + refresh started")
+
+# Register Commodity proxy + start 12hr background refresh
+if COMMODITY_PROXY_AVAILABLE:
+    register_commodity_proxy(app, start_background=True)
+    print("[Europe Backend] ✅ Commodity proxy registered (12hr cache, background refresh)")
 
 # ========================================
 # MILITARY POSTURE PROXY (v1.0.0 — April 2026)

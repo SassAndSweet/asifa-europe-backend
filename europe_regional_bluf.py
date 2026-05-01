@@ -52,8 +52,9 @@ UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN', '')
 TRACKER_KEYS = {
     'russia':    'rhetoric:russia:latest',
     'greenland': 'rhetoric:greenland:latest',
+    'ukraine':   'rhetoric:ukraine:latest',
+    'belarus':   'rhetoric:belarus:latest',
     # Future Europe trackers slot in here:
-    # 'ukraine':  'rhetoric:ukraine:latest',
     # 'hungary':  'rhetoric:hungary:latest',
     # 'poland':   'rhetoric:poland:latest',
     # 'baltics':  'rhetoric:baltics:latest',
@@ -63,6 +64,7 @@ THEATRE_FLAGS = {
     'russia':    '\U0001f1f7\U0001f1fa',  # 🇷🇺
     'greenland': '\U0001f1ec\U0001f1f1',  # 🇬🇱
     'ukraine':   '\U0001f1fa\U0001f1e6',  # 🇺🇦
+    'belarus':   '\U0001f1e7\U0001f1fe',  # 🇧🇾
     'hungary':   '\U0001f1ed\U0001f1fa',  # 🇭🇺
     'poland':    '\U0001f1f5\U0001f1f1',  # 🇵🇱
     'baltics':   '\U0001f1ea\U0001f1fa',  # 🇪🇺 fallback
@@ -72,6 +74,7 @@ THEATRE_DISPLAY = {
     'russia':    'RUSSIA',
     'greenland': 'GREENLAND',
     'ukraine':   'UKRAINE',
+    'belarus':   'BELARUS',
     'hungary':   'HUNGARY',
     'poland':    'POLAND',
     'baltics':   'BALTICS',

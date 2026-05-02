@@ -2399,6 +2399,115 @@ def fetch_moscow_times_rss():
     return articles
   
 # ========================================
+# BELARUSIAN + UKRAINIAN NATIVE-LANGUAGE RSS FEEDS (v1.4.0)
+# Belarusian: Nasha Niva, Zviazda, Euroradio, Radio Svaboda
+# Ukrainian:  Ukrainska Pravda (UA), UNIAN (UA), ZN.UA
+# Pattern matches existing RSS fetchers — graceful failures, language-tagged output.
+# ========================================
+def _fetch_native_rss(feed_url, source_name, language, log_prefix='[Europe v1.4]'):
+    """Generic RSS fetcher that tags articles with their native language code."""
+    articles = []
+    try:
+        print(f"{log_prefix} {source_name}: Fetching RSS...")
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = requests.get(feed_url, headers=headers, timeout=15)
+
+        if response.status_code != 200:
+            print(f"{log_prefix} {source_name}: HTTP {response.status_code}")
+            return []
+
+        root = ET.fromstring(response.content)
+        items = root.findall('.//item')
+
+        for item in items[:20]:
+            title_elem = item.find('title')
+            link_elem = item.find('link')
+            pubDate_elem = item.find('pubDate')
+            description_elem = item.find('description')
+
+            if title_elem is not None and link_elem is not None:
+                pub_date = pubDate_elem.text if pubDate_elem is not None else datetime.now(timezone.utc).isoformat()
+                description = description_elem.text[:500] if description_elem is not None and description_elem.text else ''
+
+                articles.append({
+                    'title': title_elem.text or '',
+                    'description': description,
+                    'url': link_elem.text or '',
+                    'publishedAt': pub_date,
+                    'source': {'name': source_name},
+                    'content': description,
+                    'language': language,
+                })
+
+        print(f"{log_prefix} {source_name}: ✓ {len(articles)} articles ({language})")
+
+    except Exception as e:
+        print(f"{log_prefix} {source_name} error: {str(e)[:100]}")
+
+    return articles
+
+
+# ── Belarusian-language native feeds ──
+def fetch_nasha_niva_rss():
+    """Nasha Niva — primary Belarusian-language opposition outlet (in exile, est. 1906)."""
+    return _fetch_native_rss('https://nashaniva.com/rss', 'Nasha Niva', 'be')
+
+def fetch_zviazda_rss():
+    """Zviazda — oldest Belarusian-language publication (state-affiliated counter-narrative)."""
+    return _fetch_native_rss('https://zviazda.by/be/rss.xml', 'Zviazda', 'be')
+
+def fetch_euroradio_be_rss():
+    """Euroradio — independent Belarusian-language broadcaster."""
+    return _fetch_native_rss('https://euroradio.fm/be/rss', 'Euroradio', 'be')
+
+def fetch_svaboda_be_rss():
+    """Radio Svaboda — RFE/RL Belarusian service."""
+    return _fetch_native_rss('https://www.svaboda.org/api/epiqq', 'Radio Svaboda', 'be')
+
+
+# ── Ukrainian-language native feeds ──
+def fetch_ukrainska_pravda_uk_rss():
+    """Ukrainska Pravda (Ukrainian-language) — flagship independent Ukrainian outlet, est. 2000."""
+    return _fetch_native_rss('https://www.pravda.com.ua/rss/view_news/', 'Ukrainska Pravda (UA)', 'uk')
+
+def fetch_unian_uk_rss():
+    """UNIAN (Ukrainian-language) — first independent Ukrainian news agency, est. 1993."""
+    return _fetch_native_rss('https://rss.unian.net/site/news_ukr.rss', 'UNIAN (UA)', 'uk')
+
+def fetch_zn_ua_rss():
+    """ZN.UA (Dzerkalo Tyzhnia) — political/economic analysis weekly, Ukrainian-language."""
+    return _fetch_native_rss('https://zn.ua/rss/full.rss', 'ZN.UA', 'uk')
+
+
+# ── Belarus — Russian-language and English-language opposition coverage (v1.4.0 full pass) ──
+def fetch_belsat_ru_rss():
+    """Belsat — Poland-based Belarusian channel, Russian-language edition. Declared 'extremist' by both Belarus and Russia (highest-signal opposition source)."""
+    return _fetch_native_rss('https://belsat.eu/ru/feed', 'Belsat (RU)', 'ru')
+
+def fetch_nexta_en_rss():
+    """NEXTA — Belarusian opposition Telegram-origin outlet, English RSS."""
+    return _fetch_native_rss('https://nexta.tv/en/rss', 'NEXTA', 'en')
+
+def fetch_rferl_belarus_en_rss():
+    """RFE/RL Belarus Service — English-language RSS."""
+    return _fetch_native_rss('https://www.rferl.org/api/zypppgmm-en', 'RFE/RL Belarus', 'en')
+
+def fetch_viasna_en_rss():
+    """Viasna Human Rights Centre — political prisoner tracking, English RSS. Key signal for crackdown intensity."""
+    return _fetch_native_rss('https://spring96.org/en/rss', 'Viasna', 'en')
+
+
+# ── Ukraine — Russian-language and additional English-language coverage (v1.4.0 full pass) ──
+def fetch_ukrainska_pravda_ru_rss():
+    """Ukrainska Pravda — Russian-language edition, for Russian-speaking Ukrainian audience coverage."""
+    return _fetch_native_rss('https://www.pravda.com.ua/rus/rss/view_news/', 'Ukrainska Pravda (RU)', 'ru')
+
+def fetch_euromaidan_press_rss():
+    """Euromaidan Press — canonical English-language Ukrainian analytical outlet, est. 2014."""
+    return _fetch_native_rss('https://euromaidanpress.com/feed', 'Euromaidan Press', 'en')
+
+
+# ========================================
 # CASUALTY TRACKING (for Ukraine/Russia)
 # ========================================
 CASUALTY_KEYWORDS = {
@@ -2941,6 +3050,32 @@ def _run_threat_scan(target, days=7):
         except Exception as e:
             print(f"Ukraine Google News error: {e}")
 
+        # ── Ukrainian-language native RSS (v1.4.0) ──
+        try:
+            rss_articles.extend(fetch_ukrainska_pravda_uk_rss())
+        except Exception as e:
+            print(f"Ukrainska Pravda RSS error: {e}")
+        try:
+            rss_articles.extend(fetch_unian_uk_rss())
+        except Exception as e:
+            print(f"UNIAN RSS error: {e}")
+        try:
+            rss_articles.extend(fetch_zn_ua_rss())
+        except Exception as e:
+            print(f"ZN.UA RSS error: {e}")
+
+        # ── Russian-language Ukraine coverage (v1.4.0 full pass) ──
+        try:
+            rss_articles.extend(fetch_ukrainska_pravda_ru_rss())
+        except Exception as e:
+            print(f"Ukrainska Pravda RU RSS error: {e}")
+
+        # ── Additional English-language Ukraine coverage (v1.4.0 full pass) ──
+        try:
+            rss_articles.extend(fetch_euromaidan_press_rss())
+        except Exception as e:
+            print(f"Euromaidan Press RSS error: {e}")
+
     if target == 'russia':
         try:
             rss_articles.extend(fetch_google_news_rss('Russia military OR Ukraine OR nuclear OR mobilization OR sanctions', 'Russia News'))
@@ -3048,6 +3183,44 @@ def _run_threat_scan(target, days=7):
         except Exception as e:
             print(f"Belarus Google News error: {e}")
 
+        # ── Belarusian-language native RSS (v1.4.0) ──
+        try:
+            rss_articles.extend(fetch_nasha_niva_rss())
+        except Exception as e:
+            print(f"Nasha Niva RSS error: {e}")
+        try:
+            rss_articles.extend(fetch_zviazda_rss())
+        except Exception as e:
+            print(f"Zviazda RSS error: {e}")
+        try:
+            rss_articles.extend(fetch_euroradio_be_rss())
+        except Exception as e:
+            print(f"Euroradio BE RSS error: {e}")
+        try:
+            rss_articles.extend(fetch_svaboda_be_rss())
+        except Exception as e:
+            print(f"Radio Svaboda BE RSS error: {e}")
+
+        # ── Russian-language Belarus opposition (v1.4.0 full pass) ──
+        try:
+            rss_articles.extend(fetch_belsat_ru_rss())
+        except Exception as e:
+            print(f"Belsat RU RSS error: {e}")
+
+        # ── English-language Belarus opposition coverage (v1.4.0 full pass) ──
+        try:
+            rss_articles.extend(fetch_nexta_en_rss())
+        except Exception as e:
+            print(f"NEXTA EN RSS error: {e}")
+        try:
+            rss_articles.extend(fetch_rferl_belarus_en_rss())
+        except Exception as e:
+            print(f"RFE/RL Belarus EN RSS error: {e}")
+        try:
+            rss_articles.extend(fetch_viasna_en_rss())
+        except Exception as e:
+            print(f"Viasna EN RSS error: {e}")
+
         # Belarus-specific GDELT queries — Russian client state, NATO border,
         # Iran cooperation (Apr 2026 trilateral), nuclear sharing, opposition
         belarus_queries = [
@@ -3064,6 +3237,11 @@ def _run_threat_scan(target, days=7):
             ('Беларусь Украина граница войска', 'rus'),
             ('Беларусь Иран сотрудничество военное', 'rus'),
             ('Беларусь оппозиция Тихановская санкции', 'rus'),
+            # ── Belarusian (bel) — native Cyrillic spellings (v1.4.0) ──
+            ('Беларусь Лукашэнка Расія НАТО', 'bel'),
+            ('Беларусь Польшча Літва мяжа', 'bel'),
+            ('Беларусь апазіцыя Ціханоўская Вясна', 'bel'),
+            ('Беларусь ядзерны Іскандэр Асіповічы', 'bel'),
         ]
         for query, lang in belarus_queries:
             try:

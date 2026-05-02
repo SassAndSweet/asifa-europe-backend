@@ -44,18 +44,20 @@ from flask import jsonify, request
 # CONFIG
 # ═══════════════════════════════════════════════════════════════════════
 
-# 10 European capitals — MUST match WEATHER_CAPITALS in europe.html
+# 12 European/Central Asian capitals — MUST match WEATHER_CAPITALS in europe.html
 WEATHER_CAPITALS = {
-    'armenia':    {'name': 'Yerevan',   'lat': 40.19, 'lon':  44.52},
-    'azerbaijan': {'name': 'Baku',      'lat': 40.41, 'lon':  49.87},
-    'belarus':    {'name': 'Minsk',     'lat': 53.90, 'lon':  27.57},
-    'cyprus':     {'name': 'Nicosia',   'lat': 35.17, 'lon':  33.36},
-    'greenland':  {'name': 'Nuuk',      'lat': 64.17, 'lon': -51.74},
-    'hungary':    {'name': 'Budapest',  'lat': 47.49, 'lon':  19.04},
-    'poland':     {'name': 'Warsaw',    'lat': 52.23, 'lon':  21.01},
-    'russia':     {'name': 'Moscow',    'lat': 55.75, 'lon':  37.62},
-    'turkey':     {'name': 'Ankara',    'lat': 39.93, 'lon':  32.86},
-    'ukraine':    {'name': 'Kyiv',      'lat': 50.45, 'lon':  30.52},
+    'armenia':      {'name': 'Yerevan',   'lat': 40.19, 'lon':  44.52},
+    'azerbaijan':   {'name': 'Baku',      'lat': 40.41, 'lon':  49.87},
+    'belarus':      {'name': 'Minsk',     'lat': 53.90, 'lon':  27.57},
+    'cyprus':       {'name': 'Nicosia',   'lat': 35.17, 'lon':  33.36},
+    'greenland':    {'name': 'Nuuk',      'lat': 64.17, 'lon': -51.74},
+    'hungary':      {'name': 'Budapest',  'lat': 47.49, 'lon':  19.04},
+    'kazakhstan':   {'name': 'Astana',    'lat': 51.17, 'lon':  71.45},
+    'poland':       {'name': 'Warsaw',    'lat': 52.23, 'lon':  21.01},
+    'russia':       {'name': 'Moscow',    'lat': 55.75, 'lon':  37.62},
+    'turkey':       {'name': 'Ankara',    'lat': 39.93, 'lon':  32.86},
+    'turkmenistan': {'name': 'Ashgabat',  'lat': 37.96, 'lon':  58.38},
+    'ukraine':      {'name': 'Kyiv',      'lat': 50.45, 'lon':  30.52},
 }
 
 WEATHER_REDIS_KEY  = 'europe_weather_bundle'

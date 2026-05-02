@@ -332,14 +332,13 @@ def _redis_set(key, value):
     if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
         return False
     try:
-        body = json.dumps(value, default=str)
         r = requests.post(
-            f'{UPSTASH_REDIS_URL}/set/{key}',
+            UPSTASH_REDIS_URL,
             headers={
                 'Authorization': f'Bearer {UPSTASH_REDIS_TOKEN}',
                 'Content-Type': 'application/json',
             },
-            json={'value': body},
+            json=['SET', key, json.dumps(value, default=str)],
             timeout=10
         )
         return r.status_code == 200

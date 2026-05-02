@@ -78,17 +78,26 @@ _scan_lock = threading.Lock()
 # RSS FEEDS
 # ============================================================
 RSS_FEEDS = [
-    # Independent / opposition
-    {'name': 'NEXTA',                     'url': 'https://nexta.tv/en/rss',                                'weight': 0.95},
-    {'name': 'Meduza (English)',          'url': 'https://meduza.io/rss/en/all',                           'weight': 0.90},
-    {'name': 'RFE/RL Belarus Service',    'url': 'https://www.rferl.org/api/zypppgmm-en',                  'weight': 0.95},
-    {'name': 'Viasna Human Rights',       'url': 'https://spring96.org/en/rss',                            'weight': 0.95},
-    # International coverage
-    {'name': 'Reuters Europe',            'url': 'https://www.reutersagency.com/feed/?best-regions=europe&post_type=best',  'weight': 0.90},
-    {'name': 'Politico Europe',           'url': 'https://www.politico.eu/feed/',                          'weight': 0.85},
-    {'name': 'Euractiv',                  'url': 'https://www.euractiv.com/feed/',                         'weight': 0.80},
-    # State / regime (counter-narrative)
-    {'name': 'BelTA (state media)',       'url': 'https://eng.belta.by/rss',                               'weight': 0.65},
+    # Independent / opposition (English)
+    {'name': 'NEXTA',                     'url': 'https://nexta.tv/en/rss',                                'weight': 0.95, 'language': 'eng'},
+    {'name': 'Meduza (English)',          'url': 'https://meduza.io/rss/en/all',                           'weight': 0.90, 'language': 'eng'},
+    {'name': 'RFE/RL Belarus Service',    'url': 'https://www.rferl.org/api/zypppgmm-en',                  'weight': 0.95, 'language': 'eng'},
+    {'name': 'Viasna Human Rights',       'url': 'https://spring96.org/en/rss',                            'weight': 0.95, 'language': 'eng'},
+    # International coverage (English)
+    {'name': 'Reuters Europe',            'url': 'https://www.reutersagency.com/feed/?best-regions=europe&post_type=best',  'weight': 0.90, 'language': 'eng'},
+    {'name': 'Politico Europe',           'url': 'https://www.politico.eu/feed/',                          'weight': 0.85, 'language': 'eng'},
+    {'name': 'Euractiv',                  'url': 'https://www.euractiv.com/feed/',                         'weight': 0.80, 'language': 'eng'},
+    # State / regime English (counter-narrative)
+    {'name': 'BelTA (state media, EN)',   'url': 'https://eng.belta.by/rss',                               'weight': 0.65, 'language': 'eng'},
+    # ───── BELARUSIAN-LANGUAGE NATIVE FEEDS (be) ─────
+    # Nasha Niva — primary Belarusian-language opposition outlet (in exile, est. 1906; "extremist" per regime)
+    {'name': 'Nasha Niva (BE)',           'url': 'https://nashaniva.com/rss',                              'weight': 0.95, 'language': 'bel'},
+    # Zviazda — oldest Belarusian-language publication (state-affiliated counter-narrative)
+    {'name': 'Zviazda (BE)',              'url': 'https://zviazda.by/be/rss.xml',                          'weight': 0.65, 'language': 'bel'},
+    # Euroradio Belarusian service — independent, Belarusian-language
+    {'name': 'Euroradio (BE)',            'url': 'https://euroradio.fm/be/rss',                            'weight': 0.90, 'language': 'bel'},
+    # Radio Svaboda (RFE/RL Belarusian service) — Belarusian-language
+    {'name': 'Radio Svaboda (BE)',        'url': 'https://www.svaboda.org/api/epiqq',                      'weight': 0.95, 'language': 'bel'},
 ]
 
 
@@ -270,6 +279,13 @@ GDELT_QUERIES = {
         '"беларусь" AND ("иран" OR "шос")',
         '"беларусь" AND ("ядерное" OR "искандер")',
     ],
+    # Belarusian Cyrillic — uses native spellings (Лукашэнка vs Лукашенко, Беларусь same in both)
+    'bel': [
+        '"беларусь" AND ("лукашэнка" OR "мінск")',
+        '"беларусь" AND ("нато" OR "польшча" OR "літва")',
+        '"беларусь" AND ("апазіцыя" OR "ціханоўская" OR "вясна")',
+        '"беларусь" AND ("ядзерны" OR "іскандэр")',
+    ],
 }
 
 
@@ -309,13 +325,14 @@ def _redis_set(key, value):
     if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
         return False
     try:
+        body = json.dumps(value, default=str)
         r = requests.post(
-            UPSTASH_REDIS_URL,
+            f'{UPSTASH_REDIS_URL}/set/{key}',
             headers={
                 'Authorization': f'Bearer {UPSTASH_REDIS_TOKEN}',
                 'Content-Type': 'application/json',
             },
-            json=['SET', key, json.dumps(value, default=str)],
+            json={'value': body},
             timeout=10
         )
         return r.status_code == 200
@@ -364,7 +381,7 @@ def _parse_pub_date(pub_str):
         return pub_str
 
 
-def _fetch_rss(url, source_name, weight=0.85, max_items=20):
+def _fetch_rss(url, source_name, weight=0.85, max_items=20, language='eng'):
     out = []
     try:
         feed = feedparser.parse(url)
@@ -377,6 +394,7 @@ def _fetch_rss(url, source_name, weight=0.85, max_items=20):
                 'source':      source_name,
                 'source_type': 'rss',
                 'weight':      weight,
+                'language':    language,
             })
     except Exception as e:
         print(f'[Belarus RSS] {source_name}: {str(e)[:120]}')
@@ -528,7 +546,7 @@ def _fetch_all_articles():
 
     # RSS
     for feed in RSS_FEEDS:
-        articles.extend(_fetch_rss(feed['url'], feed['name'], feed['weight']))
+        articles.extend(_fetch_rss(feed['url'], feed['name'], feed['weight'], language=feed.get('language', 'eng')))
 
     # GDELT
     for lang, queries in GDELT_QUERIES.items():
@@ -715,13 +733,15 @@ def run_belarus_rhetoric_scan(force=False):
     alert = _alert_level_from_score(score)
 
     # Articles by language for interpreter
-    articles_en = [a for a in articles if a.get('language', 'eng') in ('eng', None)]
-    articles_ru = [a for a in articles if a.get('language') == 'rus']
+    articles_en = [a for a in articles if a.get('language', 'eng') in ('eng', 'en', None)]
+    articles_ru = [a for a in articles if a.get('language') in ('rus', 'ru')]
+    articles_be = [a for a in articles if a.get('language') in ('bel', 'be')]
 
     # Build scan_data for interpreter
     scan_data = {
         'articles_en':        articles_en,
         'articles_ru':        articles_ru,
+        'articles_be':        articles_be,
         'telegram_messages':  telegram_messages,
         'bluesky_signals':    bluesky_signals,
         'reddit_signals':     reddit_signals,
@@ -765,6 +785,11 @@ def run_belarus_rhetoric_scan(force=False):
         'reddit_count':    len(reddit_signals),
         'articles_en':     articles_en,
         'articles_ru':     articles_ru,
+        'articles_be':     articles_be,
+        # Full social signal arrays (capped to keep payload manageable)
+        'telegram_signals': telegram_messages[:30],
+        'bluesky_signals':  bluesky_signals[:30],
+        'reddit_signals':   reddit_signals[:30],
         # Actor breakdown
         'actor_summaries': actor_summaries,
         # Interpretation (canonical schema)

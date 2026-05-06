@@ -1861,6 +1861,14 @@ def register_russia_rhetoric_endpoints(app):
             return jsonify({'success': False, 'error': 'No data yet -- trigger a scan first'}), 404
 
         actors = cached.get('actors', {})
+        # v1.1.0 (May 6 2026): surface interpretation block on /summary so stability
+        # page rhetoric card can render full BLUF without round-tripping the heavy endpoint.
+        interp = cached.get('interpretation', {}) or {}
+        so_what = interp.get('so_what', {}) or {}
+        red_lines = interp.get('red_lines', {}) or {}
+        diplomatic_track = interp.get('diplomatic_track', {}) or {}
+        # Top 3 red lines for card surface (full list available on /api/rhetoric/russia)
+        top_red_lines = (red_lines.get('triggered') or [])[:3]
         return jsonify({
             'success':         True,
             'theatre_score':   cached.get('theatre_score', 0),
@@ -1873,6 +1881,23 @@ def register_russia_rhetoric_endpoints(app):
             'russia_military_level':  actors.get('russia_military',  {}).get('escalation_level', 0),
             'russia_gov_level':       actors.get('russia_government',{}).get('escalation_level', 0),
             'ukraine_level':          actors.get('ukraine',          {}).get('escalation_level', 0),
+            'total_articles':         cached.get('total_articles', 0),
+            # ── v1.1.0: Strategic Assessment surface ──
+            'so_what_scenario':       so_what.get('scenario', ''),
+            'so_what_scenario_color': so_what.get('scenario_color', '#6b7280'),
+            'so_what_scenario_icon':  so_what.get('scenario_icon', '⚪'),
+            'so_what_situation':      so_what.get('situation', ''),
+            'so_what_assessment':     so_what.get('assessment', ''),
+            'so_what_watch_list':     so_what.get('watch_list', [])[:5],
+            # ── v1.1.0: Red Lines summary ──
+            'red_lines_breached':     red_lines.get('breached_count', 0),
+            'red_lines_approaching':  red_lines.get('approaching_count', 0),
+            'top_red_lines':          top_red_lines,
+            # ── v1.1.0: Diplomatic Track summary ──
+            'diplomatic_score':       diplomatic_track.get('score', 0),
+            'diplomatic_scenario':    diplomatic_track.get('scenario', ''),
+            'diplomatic_color':       diplomatic_track.get('scenario_color', '#6b7280'),
+            'maximum_pressure':       diplomatic_track.get('maximum_pressure', False),
             'scanned_at':      cached.get('scanned_at', ''),
             'from_cache':      True,
         })

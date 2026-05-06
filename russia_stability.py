@@ -1,7 +1,7 @@
 """
 Asifah Analytics — Russia Stability Index Backend
 Europe Backend Module
-v1.0.0 — April 2026
+v1.1.0 — May 6 2026 (Phase 4 commodity-aware)
 
 ANALYTICAL FRAME:
 Russia's stability is measured on an INVERTED scale from its peer autocracies —
@@ -36,11 +36,13 @@ LIVE DATA SOURCES:
   MOEX Index:   Alpha Vantage (ALPHA_VANTAGE_KEY) — Moscow Exchange benchmark
   Urals proxy:  Calculated from Brent minus historical discount range
   Articles:     NewsAPI + GDELT
+  Commodity:    europe:commodity:russia (populated by Europe proxy from ME backend)
 
 REDIS KEYS:
   Cache:    stability:russia:latest
   History:  stability:russia:history
   Reads:    rhetoric:crosstheater:fingerprints (written by Russia rhetoric tracker)
+  Reads:    europe:commodity:russia (Phase 4 Gold Standard, written by Europe proxy)
 
 ENDPOINTS:
   GET /api/stability/russia
@@ -49,6 +51,10 @@ ENDPOINTS:
 
 CHANGELOG:
   v1.0.0 (2026-04-11): Initial build
+  v1.1.0 (2026-05-06): Phase 4 Gold Standard — commodity-aware
+                       - Added _read_russia_commodity_pressure() helper
+                       - Surface commodity_pressure in summary endpoint
+                       - NO stability score penalty (Option A leverage policy)
 
 COPYRIGHT 2025-2026 Asifah Analytics. All rights reserved.
 """
@@ -69,9 +75,10 @@ UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN') or os.environ.get('U
 NEWSAPI_KEY         = os.environ.get('NEWSAPI_KEY')
 ALPHA_VANTAGE_KEY   = os.environ.get('ALPHA_VANTAGE_KEY')
 
-CACHE_KEY           = 'stability:russia:latest'
-HISTORY_KEY         = 'stability:russia:history'
-CROSSTHEATER_KEY    = 'rhetoric:crosstheater:fingerprints'
+CACHE_KEY                 = 'stability:russia:latest'
+HISTORY_KEY               = 'stability:russia:history'
+CROSSTHEATER_KEY          = 'rhetoric:crosstheater:fingerprints'
+COMMODITY_PROXY_REDIS_KEY = 'europe:commodity:russia'  # Phase 4 Gold Standard
 
 SCAN_INTERVAL_HOURS = 12
 
@@ -228,6 +235,58 @@ def _redis_lpush_trim(key, value, max_len=336):
             )
     except Exception as e:
         print(f"[Russia Stability] Redis LPUSH error: {str(e)[:80]}")
+
+
+# ============================================
+# COMMODITY PRESSURE READER (Phase 4 Gold Standard — May 6 2026)
+# ============================================
+# Russia stability backend lives on the Europe deployment, so we read
+# commodity data from the Europe proxy's Redis cache (europe:commodity:russia).
+# The proxy refreshes from ME backend every 12 hours.
+#
+# IMPORTANT: For Russia we apply NO stability score penalty (Option A policy).
+# Russia's commodity activity is a LEVERAGE signal, not a regime stress signal.
+# Producer-side surge = export revenue + geopolitical leverage = positive for
+# Russian regime cohesion (war financing, sanctions evasion). Tracking these
+# as informational signals only — they flow into BLUF/GPI as leverage indicators.
+def _read_russia_commodity_pressure():
+    """
+    Read commodity-pressure data for Russia from the Europe proxy's Redis cache.
+    The Europe proxy (commodity_proxy_europe.py) writes here every 12h after
+    fetching from ME backend's /api/commodity-pressure/russia endpoint.
+
+    Returns the proxy's full payload shape:
+        {
+            'success':              bool,
+            'commodity_pressure':   float,
+            'alert_level':          str,           # normal|elevated|high|surge
+            'commodity_summaries':  list,          # tiles with sparklines
+            'top_signals':          list,
+            'prose':                str,
+            'has_live_data':        bool,
+            'profile_count':        int,
+            ...
+        }
+    Returns None if cache cold or any error.
+    """
+    if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
+        return None
+    try:
+        resp = requests.get(
+            f"{UPSTASH_REDIS_URL}/get/{COMMODITY_PROXY_REDIS_KEY}",
+            headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+            timeout=5
+        )
+        data = resp.json()
+        if not data.get('result'):
+            return None
+        bundle = json.loads(data['result'])
+        if not isinstance(bundle, dict):
+            return None
+        return bundle
+    except Exception as e:
+        print(f"[Russia Commodity] Read error (non-fatal): {str(e)[:120]}")
+        return None
 
 
 # ============================================
@@ -804,7 +863,7 @@ def run_russia_stability_scan():
         'scan_time_seconds':    scan_time,
         'scanned_at':           scanned_at,
         'from_cache':           False,
-        'version':              '1.1.0',
+        'version':              '1.1.0-russia-commodity-aware',
     }
 
     # Cache to Redis
@@ -851,116 +910,6 @@ def start_russia_stability_refresh():
 # FLASK ENDPOINTS
 # ============================================
 
-# ============================================
-# COMMODITY PRESSURE READER (Phase 4 Gold Standard — May 6 2026)
-# ============================================
-# Russia stability backend lives on the Europe deployment, so we read
-# commodity data from the Europe proxy's Redis cache (europe:commodity:russia).
-# The proxy refreshes from ME backend every 12 hours.
-#
-# IMPORTANT: For Russia we apply NO stability score penalty (Option A policy).
-# Russia's commodity activity is a LEVERAGE signal, not a regime stress signal.
-# Producer-side surge = export revenue + geopolitical leverage = positive for
-# Russian regime cohesion (war financing, sanctions evasion). Tracking these
-# as informational signals only — they flow into BLUF/GPI as leverage indicators.
-COMMODITY_PROXY_REDIS_KEY = 'europe:commodity:russia'
-
-
-def _read_russia_commodity_pressure():
-    """
-    Read commodity-pressure data for Russia from the Europe proxy's Redis cache.
-    The Europe proxy (commodity_proxy_europe.py) writes here every 12h after
-    fetching from ME backend's /api/commodity-pressure/russia endpoint.
-
-    Returns the proxy's full payload shape:
-        {
-            'success':              bool,
-            'commodity_pressure':   float,
-            'alert_level':          str,           # normal|elevated|high|surge
-            'commodity_summaries':  list,          # tiles with sparklines
-            'top_signals':          list,
-            'prose':                str,
-            'has_live_data':        bool,
-            'profile_count':        int,
-            ...
-        }
-    Returns None if cache cold or any error.
-    """
-    if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
-        return None
-    try:
-        resp = requests.get(
-            f"{UPSTASH_REDIS_URL}/get/{COMMODITY_PROXY_REDIS_KEY}",
-            headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
-            timeout=5
-        )
-        data = resp.json()
-        if not data.get('result'):
-            return None
-        bundle = json.loads(data['result'])
-        if not isinstance(bundle, dict):
-            return None
-        return bundle
-    except Exception as e:
-        print(f"[Russia Commodity] Read error (non-fatal): {str(e)[:120]}")
-        return None
-
-
-# ============================================
-# COMMODITY PRESSURE READER (Phase 4 Gold Standard — May 6 2026)
-# ============================================
-# Russia stability backend lives on the Europe deployment, so we read
-# commodity data from the Europe proxy's Redis cache (europe:commodity:russia).
-# The proxy refreshes from ME backend every 12 hours.
-#
-# IMPORTANT: For Russia we apply NO stability score penalty (Option A policy).
-# Russia's commodity activity is a LEVERAGE signal, not a regime stress signal.
-# Producer-side surge = export revenue + geopolitical leverage = positive for
-# Russian regime cohesion (war financing, sanctions evasion). Tracking these
-# as informational signals only — they flow into BLUF/GPI as leverage indicators.
-COMMODITY_PROXY_REDIS_KEY = 'europe:commodity:russia'
-
-
-def _read_russia_commodity_pressure():
-    """
-    Read commodity-pressure data for Russia from the Europe proxy's Redis cache.
-    The Europe proxy (commodity_proxy_europe.py) writes here every 12h after
-    fetching from ME backend's /api/commodity-pressure/russia endpoint.
-
-    Returns the proxy's full payload shape:
-        {
-            'success':              bool,
-            'commodity_pressure':   float,
-            'alert_level':          str,           # normal|elevated|high|surge
-            'commodity_summaries':  list,          # tiles with sparklines
-            'top_signals':          list,
-            'prose':                str,
-            'has_live_data':        bool,
-            'profile_count':        int,
-            ...
-        }
-    Returns None if cache cold or any error.
-    """
-    if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
-        return None
-    try:
-        resp = requests.get(
-            f"{UPSTASH_REDIS_URL}/get/{COMMODITY_PROXY_REDIS_KEY}",
-            headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
-            timeout=5
-        )
-        data = resp.json()
-        if not data.get('result'):
-            return None
-        bundle = json.loads(data['result'])
-        if not isinstance(bundle, dict):
-            return None
-        return bundle
-    except Exception as e:
-        print(f"[Russia Commodity] Read error (non-fatal): {str(e)[:120]}")
-        return None
-
-
 def register_russia_stability_endpoints(app):
 
     @app.route('/api/stability/russia', methods=['GET'])
@@ -1006,11 +955,6 @@ def register_russia_stability_endpoints(app):
                 'success': False,
                 'error':   'No data yet — run /api/stability/russia?force=true first'
             }), 404
-
-        # Phase 4 Gold Standard — surface commodity pressure for frontend BLUF context
-        # Note: frontend uses /api/europe/commodity/russia directly for the card; this
-        # field is for backend consumers (regional BLUF, GPI) that read summary endpoint.
-        commodity_pressure_data = _read_russia_commodity_pressure()
 
         # Phase 4 Gold Standard — surface commodity pressure for frontend BLUF context
         # Note: frontend uses /api/europe/commodity/russia directly for the card; this

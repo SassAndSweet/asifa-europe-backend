@@ -881,6 +881,32 @@ RSS_SOURCES = {
         'name': 'Ukrainska Pravda (EN)',
         'weight': 0.95,
     },
+    # ── v2.0 — Ukrainian-language native sources (May 6, 2026) ──
+    # Ukraine is the primary battlefield; native-language coverage is denser.
+    'ukraine_pravda_ua': {
+        'url': 'https://www.pravda.com.ua/rss/',
+        'name': 'Ukrainska Pravda (UA)',
+        'weight': 0.95,
+        'note': 'Ukraine\'s leading independent newspaper — native Ukrainian-language coverage',
+    },
+    'liga_ua': {
+        'url': 'https://news.liga.net/all/rss.xml',
+        'name': 'Liga.net (UA)',
+        'weight': 0.85,
+        'note': 'Ukrainian business + politics — front signals + domestic stability',
+    },
+    'nv_ua': {
+        'url': 'https://nv.ua/rss/all.xml',
+        'name': 'NV.ua (UA)',
+        'weight': 0.85,
+        'note': 'Ukrainian news outlet — native-language ground truth',
+    },
+    'ukrinform_en': {
+        'url': 'https://www.ukrinform.net/rss/block-lastnews',
+        'name': 'Ukrinform (EN)',
+        'weight': 0.85,
+        'note': 'Ukrainian state news agency — Kyiv official line',
+    },
     'the_insider': {
         'url': 'https://theins.ru/feed',
         'name': 'The Insider (Russia investigative)',
@@ -892,6 +918,39 @@ RSS_SOURCES = {
         'name': 'Meduza (EN)',
         'weight': 0.9,
         'note': 'Independent Russian journalism -- Kremlin/domestic signals',
+    },
+    # ── v2.0 — Russian-language native sources (May 6, 2026) ──
+    # Catches Kremlin/domestic signals invisible to English coverage.
+    # State media included as official-line baseline (TASS/RIA reflect Kremlin policy).
+    'meduza_ru': {
+        'url': 'https://meduza.io/rss/all',
+        'name': 'Meduza (RU)',
+        'weight': 0.9,
+        'note': 'Independent Russian journalism — original Russian-language signals',
+    },
+    'novaya_gazeta_europe_ru': {
+        'url': 'https://novayagazeta.eu/feed',
+        'name': 'Novaya Gazeta Europe (RU)',
+        'weight': 0.9,
+        'note': 'Russian opposition journalism in exile — domestic dissent signals',
+    },
+    'tass_en': {
+        'url': 'https://tass.com/rss/v2.xml',
+        'name': 'TASS (EN)',
+        'weight': 0.7,
+        'note': 'Russian state news agency — official Kremlin-line baseline (READ AS PROPAGANDA)',
+    },
+    'ria_novosti_ru': {
+        'url': 'https://ria.ru/export/rss2/archive/index.xml',
+        'name': 'RIA Novosti (RU)',
+        'weight': 0.7,
+        'note': 'Russian state media — official Kremlin baseline (READ AS PROPAGANDA)',
+    },
+    'rt_en': {
+        'url': 'https://www.rt.com/rss/',
+        'name': 'RT (EN)',
+        'weight': 0.6,
+        'note': 'Russian state-funded English — propaganda baseline (handle accordingly)',
     },
     # ── Western defense / OSINT ──
     'isw': {
@@ -951,6 +1010,20 @@ RSS_SOURCES = {
         'name': 'YLE Finland (EN)',
         'weight': 0.85,
         'note': 'Finnish state broadcaster -- Finland/Russia border signals',
+    },
+    # ── v2.0 — Belarus opposition/exile coverage (May 6, 2026) ──
+    # Belarus is in actor list; deserves dedicated coverage from independent sources.
+    'belsat_en': {
+        'url': 'https://belsat.eu/en/feed/',
+        'name': 'Belsat (EN)',
+        'weight': 0.85,
+        'note': 'Polish-funded Belarusian-language outlet — Belarus opposition + Lukashenko signals',
+    },
+    'reform_by': {
+        'url': 'https://reform.by/feed',
+        'name': 'Reform.by',
+        'weight': 0.8,
+        'note': 'Belarusian independent news in exile — domestic Belarus signals',
     },
     # ── Nordic / Arctic ──
     'high_north_news': {
@@ -1027,6 +1100,33 @@ GDELT_QUERIES = {
         'Russia military morale desertion soldiers',
         'Russia Wagner mercenary Africa',
         'Russia internal dissent military opposition',
+        # ── v2.0 (May 6, 2026) — additional Ukraine front battlespaces ──
+        'Sumy front Russia attack',
+        'Pokrovsk front Russia advance',
+        'Toretsk Russia capture Ukraine',
+        'Vovchansk Kharkiv front Russia',
+        'Robotyne Zaporizhzhia front',
+        'Kupyansk Russia Ukraine',
+        # ── v2.0 — Russia-China convergence (English-language) ──
+        'Russia China military cooperation Putin Xi',
+        'Russia China dual-use components Ukraine weapons',
+        'Power of Siberia gas China Russia',
+        'Russia China Northern Sea Route Arctic',
+        'Russia China BRICS sanctions evasion',
+    ],
+    # ── v2.0 — Mandarin (zho) Russia-China convergence (May 6, 2026) ──
+    # Captures Chinese-language framing of Russia-China relations,
+    # Power of Siberia coverage, and Putin-Xi diplomatic signals
+    # invisible to English-language sources.
+    'zho': [
+        '俄罗斯 中国 军事合作',          # Russia China military cooperation
+        '普京 习近平 会晤',              # Putin Xi meeting
+        '俄乌战争 中国立场',             # Russia-Ukraine war China position
+        '西伯利亚力量 天然气',           # Power of Siberia gas
+        '俄罗斯 北方航道 中国',          # Russia Northern Sea Route China
+        '金砖国家 俄罗斯 制裁',          # BRICS Russia sanctions
+        '俄罗斯 伊朗 中国',              # Russia Iran China
+        '俄朝合作 弹药',                 # Russia DPRK ammunition cooperation
     ],
     'rus': [
         # Russian-language MoD / Kremlin
@@ -1043,6 +1143,49 @@ GDELT_QUERIES = {
         # Diplomatic
         'переговоры Россия Украина мир',
         'Путин Трамп переговоры',
+        # ── v2.0 (May 6, 2026) — Russia-China convergence (Russian-language) ──
+        'Россия Китай военное сотрудничество',
+        'Путин Си Цзиньпин встреча',
+        'Сила Сибири газ Китай',
+        'БРИКС Россия санкции',
+        # ── v2.0 — Russia-Iran axis (Russian-language) ──
+        'Россия Иран военные поставки',
+        'Путин Пезешкиан соглашение',
+        'российские ракеты Иран',
+        # ── v2.0 — Russia-DPRK axis (Russian-language) ──
+        'Россия КНДР боеприпасы',
+        'российско-северокорейское сотрудничество',
+    ],
+    # ── v2.0 — Farsi (fas) Russia-Iran axis (May 6, 2026) ──
+    # Captures Iranian-language framing of Russia-Iran weapons transfers,
+    # satellite cooperation, and diplomatic coordination invisible to
+    # English/Russian sources.
+    'fas': [
+        'روسیه ایران همکاری نظامی',          # Russia Iran military cooperation
+        'پوتین پزشکیان توافق',                # Putin Pezeshkian agreement
+        'پرتاب ماهواره ایرانی روسیه',         # Russia launches Iranian satellite
+        'روسیه شاهد پهپاد',                  # Russia Shahed drone
+        'عراقچی مسکو',                       # Araghchi Moscow
+        'مجتبی خامنه‌ای',                    # Mojtaba Khamenei (succession signal)
+        'دریای خزر تجارت',                   # Caspian Sea trade
+        'وتو روسیه شورای امنیت',             # Russia veto UN Security Council
+    ],
+    # ── v2.0 — Arabic (ara) MENA spillover + Africa (May 6, 2026) ──
+    # Lighter-touch — Russia diplomatic mediation in MENA, Wagner/Africa Corps,
+    # arms deals to Gulf, Russia-Syria continuity signals.
+    'ara': [
+        'روسيا إيران تعاون عسكري',            # Russia Iran military cooperation
+        'بوتين الشرق الأوسط وساطة',           # Putin Middle East mediation
+        'فاغنر أفريقيا',                      # Wagner Africa
+        'الفيلق الأفريقي روسيا',              # Africa Corps Russia
+        'روسيا سوريا قاعدة',                 # Russia Syria base
+        'روسيا الخليج أسلحة',                # Russia Gulf weapons
+    ],
+    # ── v2.0 — Belarusian (bel) — Lukashenko/border signals (May 6, 2026) ──
+    'bel': [
+        'Беларусь Расея вайскова',           # Belarus Russia military
+        'Лукашэнка Пуцін',                    # Lukashenko Putin
+        'ядзерная зброя Беларусь',            # nuclear weapons Belarus
     ],
     'ukr': [
         # Ukrainian-language signals
@@ -1051,6 +1194,15 @@ GDELT_QUERIES = {
         'фронт Україна наступ Росія',
         'Росія ракетний удар Україна',
         'переговори мир Україна',
+        # ── v2.0 (May 6, 2026) — Ukrainian-language battlefield + diplomatic depth ──
+        'Покровськ фронт російський наступ',          # Pokrovsk front Russian offensive
+        'Курська область українські сили',            # Kursk region Ukrainian forces
+        'Сумська область обстріл',                    # Sumy region shelling
+        'українські дрони далекобійні Росія',         # Ukrainian long-range drones Russia
+        'Зеленський Трамп переговори',                # Zelenskyy Trump negotiations
+        'мобілізація Україна',                        # mobilization Ukraine
+        'українські БпЛА Москва',                     # Ukrainian drones Moscow
+        'Шахед атака Україна',                        # Shahed attack Ukraine
     ],
 }
 

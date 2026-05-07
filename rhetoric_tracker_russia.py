@@ -860,6 +860,216 @@ HYBRID_TRIGGERS = {
 
 
 # ============================================
+# REGIME SIGNALS (May 7 2026)
+# Five sub-detection ladders for Russia's contribution to structural shifts
+# in the international system. Russia's role is distinct from Iran's:
+#   - Iran = densest sanctions evasion behavior (gold-for-oil)
+#   - Russia = densest arms supplier + densest dedollarization rhetoric
+#     + densest shadow fleet (G7 cap evasion) + BRICS host nation
+# Each fires from Russia-origin content and writes to the cross-theater
+# fingerprint for the convergence registry to consume.
+# Note: No OPEC realignment ladder — Russia is OPEC+ coordinator,
+# not OPEC member. Energy-bloc signals flow through existing hybrid vector.
+# ============================================
+
+# Sub-signal 1: Russian Arms Exports (parallel arms trade ecosystem)
+# Feeds: arms_trade_realignment
+# Russia as the PRIMARY non-Western weapons exporter — Iran S-400,
+# DPRK shell deals, Venezuela air defense, Wagner/Africa Corps transfers
+RUSSIA_ARMS_EXPORT_TRIGGERS = {
+    5: [
+        'russia delivers s-400 iran', 'russia ships nuclear submarines abroad',
+        'russia transfers strategic weapons', 'russia su-35 iran delivered',
+        'تحویل اس-400 ایران', 'روسيا تسلم إس-400',
+    ],
+    4: [
+        'russia s-400 iran', 'russia su-35 iran',
+        'russia arms iran', 'russia weapons iran',
+        'russia advanced drones iran', 'russia air defense iran',
+        'russia weapons venezuela', 'russia air defense venezuela',
+        'russia arms dprk', 'russia weapons north korea',
+        'russia arms deal', 'russia weapons transfer',
+        'russia military equipment iran', 'russia defense exports',
+        'россия вооружения иран', 'россия с-400 иран',
+        'تسلیحات روسیه ایران', 'الأسلحة الروسية إيران',
+    ],
+    3: [
+        'russia iran military supplies', 'russia iran defense',
+        'russia weapons supplier', 'russia defense industry export',
+        'russia arms cooperation', 'russia military partnership',
+        'russia exports weapons', 'rosoboronexport',
+        'russia india defense deal', 'russia algeria arms',
+        'россия экспорт оружия', 'россия военные поставки',
+        'صادرات سلاح روسیه', 'تصدير الأسلحة الروسية',
+    ],
+    2: [
+        'russia defense industry', 'russia arms', 'russia weapons trade',
+        'rosoboronexport', 'russia military export',
+        'оружейный экспорт', 'الصناعة الدفاعية الروسية',
+    ],
+    1: [
+        'russia weapons', 'russia arms', 'russian defense',
+        'российское оружие', 'الأسلحة الروسية',
+    ],
+}
+
+# Sub-signal 2: Dedollarization Rhetoric (Putin/Lavrov/MFA explicit signaling)
+# Feeds: dedollarization_drumbeat, financial_system_fragmentation
+# Russia is the loudest public-stage voice on dedollarization
+RUSSIA_DEDOLLARIZATION_TRIGGERS = {
+    5: [
+        'russia abandons dollar entirely', 'russia dollar-free trade established',
+        'russia exits swift system', 'putin announces dollar replacement',
+        'россия отказ от доллара', 'روسيا تتخلى عن الدولار',
+    ],
+    4: [
+        'putin dedollarization', 'lavrov dedollarization',
+        'russia non-dollar trade', 'russia dedollarisation',
+        'russia swift alternative', 'spfs russia',
+        'russia financial sovereignty', 'russia dollar replacement',
+        'russia trade national currencies', 'russia rouble settlement',
+        'putin dollar dominance', 'putin western financial',
+        'putin spief dedollarization', 'lavrov dollar weaponization',
+        'дедолларизация россия', 'россия независимость рубля',
+        'إلغاء الدولار روسيا', 'روسيا الاستقلال المالي',
+    ],
+    3: [
+        'russia non-western trade', 'russia multipolar economy',
+        'russia financial independence', 'russia sanctions resistant',
+        'russia trade in rubles', 'russia bilateral currencies',
+        'russia financial sovereignty', 'russia spief economic',
+        'russia china non-dollar', 'russia india rupee trade',
+        'россия торговля в рублях', 'россия многополярная экономика',
+        'تجارة الروبل الروسي', 'الاقتصاد الروسي المتعدد',
+    ],
+    2: [
+        'russia economic resistance', 'russia ruble trade',
+        'russia financial system', 'russia spief',
+        'спиеф', 'منتدى سانت بطرسبرغ',
+    ],
+    1: [
+        'russia economy', 'russia ruble', 'russia trade',
+        'российская экономика', 'الاقتصاد الروسي',
+    ],
+}
+
+# Sub-signal 3: Shadow Fleet (G7 oil price cap evasion — Russia-specific)
+# Feeds: sanctions_evasion_cluster, financial_system_fragmentation
+# Russia's "dark fleet" of aging tankers operating outside G7 insurance
+RUSSIA_SHADOW_FLEET_TRIGGERS = {
+    5: [
+        'russia shadow fleet sanctions broken', 'russia oil price cap collapsed',
+        'russia confirms cap evasion scaled', 'eu shadow fleet incident',
+        'теневой флот россии санкции', 'الأسطول الظلي الروسي',
+    ],
+    4: [
+        'russia shadow fleet', 'russia dark fleet',
+        'russia g7 price cap evasion', 'russia oil price cap',
+        'russia tanker reflagging', 'russia oil sanctions evasion',
+        'russia uninsured tankers', 'russian oil cap violation',
+        'shadow fleet incident', 'dark fleet russia oil',
+        'russia oil disguised origin', 'aframax russia shadow',
+        'russia spoofing ais', 'russian ship-to-ship transfer',
+        'теневой флот', 'الأسطول الظلي',
+    ],
+    3: [
+        'russia oil cap workaround', 'russia oil sanctioned export',
+        'russia tanker tracking', 'russia oil routing',
+        'russia china oil shipping', 'russia india oil flow',
+        'russia oil revenue sanctions', 'russia tanker sanctions',
+        'russia ais disabled', 'russian tanker dark',
+        'russia oil price discount', 'russia urals discount',
+        'обход санкций нефть', 'تهرب العقوبات النفطية',
+    ],
+    2: [
+        'russia oil sanctions', 'russia oil revenue',
+        'russia tanker', 'russia oil exports',
+        'нефтяной экспорт россии', 'صادرات النفط الروسية',
+    ],
+    1: [
+        'russia oil', 'russian tanker', 'russia oil trade',
+        'российская нефть', 'النفط الروسي',
+    ],
+}
+
+# Sub-signal 4: BRICS Alignment (Russia as host/architect)
+# Feeds: dedollarization_drumbeat, financial_system_fragmentation
+# Russia hosted Kazan 2024 BRICS summit; pushes BRICS Pay hardest
+RUSSIA_BRICS_ALIGNMENT_TRIGGERS = {
+    5: [
+        'brics common currency announced', 'brics pay launched fully',
+        'putin announces brics financial system', 'brics ndb sanctions tool',
+        'валюта брикс', 'العملة الموحدة لبريكس',
+    ],
+    4: [
+        'russia brics summit', 'russia brics pay',
+        'russia brics expansion', 'russia brics payment',
+        'russia brics common currency', 'russia brics financial',
+        'putin brics summit', 'kazan brics',
+        'russia ndb', 'russia new development bank',
+        'putin brics speech', 'lavrov brics',
+        'brics+ russia expansion', 'brics chairmanship russia',
+        'россия саммит брикс', 'بريكس روسيا',
+        'بنك التنمية الجديد', 'إعلان كازان بريكس',
+    ],
+    3: [
+        'russia brics partnership', 'russia brics cooperation',
+        'russia multipolar order', 'russia shanghai cooperation',
+        'russia sco brics', 'russia multilateral',
+        'russia eaeu', 'russia eurasian economic',
+        'russia china india trilateral',
+        'россия брикс сотрудничество', 'تعاون بريكس روسيا',
+    ],
+    2: [
+        'russia brics', 'russia sco',
+        'russia emerging economies', 'russia multipolar',
+        'брикс', 'بريكس',
+    ],
+    1: [
+        'brics russia', 'shanghai cooperation', 'sco russia',
+        'брикс россия', 'بريكس روسيا',
+    ],
+}
+
+# Sub-signal 5: Yuan/Ruble Settlement (Russia-China non-USD trade)
+# Feeds: financial_system_fragmentation, dedollarization_drumbeat
+# The Russia-China non-USD trade share is the LARGEST single dataset
+# in the global dedollarization story
+RUSSIA_YUAN_SETTLEMENT_TRIGGERS = {
+    5: [
+        'russia china 100 percent non-dollar', 'russia china yuan oil entirely',
+        'russia china dollar-free trade complete',
+        'россия китай без доллара', 'روسيا الصين بدون الدولار',
+    ],
+    4: [
+        'russia china yuan trade', 'russia china rmb settlement',
+        'russia yuan oil', 'russia china currency swap',
+        'russia china non-dollar trade', 'russia india rupee trade',
+        'russia ruble yuan trade', 'cips russia',
+        'russia china financial', 'russia oil yuan settlement',
+        'russia china trade local currencies', 'russia china bilateral currency',
+        'россия китай юань торговля', 'تجارة اليوان الروسي الصيني',
+    ],
+    3: [
+        'russia china currency', 'russia china yuan',
+        'russia china rmb', 'russia india rupee',
+        'russia china non-dollar', 'china russia payment',
+        'russia bilateral currency trade', 'russia local currency settlement',
+        'россия китай местные валюты', 'الروبل اليوان',
+    ],
+    2: [
+        'russia china trade', 'russia india trade',
+        'russia china oil', 'russia china financial',
+        'торговля россия китай', 'التجارة الروسية الصينية',
+    ],
+    1: [
+        'russia china', 'china russia', 'russia india',
+        'россия китай', 'روسيا الصين',
+    ],
+}
+
+
+# ============================================
 # RSS SOURCES
 # ============================================
 RSS_SOURCES = {
@@ -1540,10 +1750,61 @@ def _classify_articles(articles):
 
 
 # ============================================
+# REGIME SIGNAL SUB-SCORER (May 7 2026)
+# Mirrors iran tracker's _score_iran_regime_signals pattern.
+# Runs all five regime-signal ladders against the article corpus and
+# returns per-dimension max levels. Output flows to (a) the
+# cross-theater fingerprint write, and (b) the score modifier.
+# ============================================
+def _score_russia_regime_signals(articles):
+    """
+    Score each Russia regime-signal dimension separately.
+    Returns dict: {
+        'arms_export':       0-5,
+        'dedollarization':   0-5,
+        'shadow_fleet':      0-5,
+        'brics_alignment':   0-5,
+        'yuan_settlement':   0-5,
+        'max':               0-5,  # highest across all dimensions
+        'active_count':      int,  # count of dimensions at L3+
+    }
+    Active count is what feeds the score modifier (capped at +5 in
+    _compute_theatre_score). Per-dimension levels are written to the
+    cross-theater fingerprint so the convergence registry can read them.
+    """
+    dimensions = {
+        'arms_export':     RUSSIA_ARMS_EXPORT_TRIGGERS,
+        'dedollarization': RUSSIA_DEDOLLARIZATION_TRIGGERS,
+        'shadow_fleet':    RUSSIA_SHADOW_FLEET_TRIGGERS,
+        'brics_alignment': RUSSIA_BRICS_ALIGNMENT_TRIGGERS,
+        'yuan_settlement': RUSSIA_YUAN_SETTLEMENT_TRIGGERS,
+    }
+    scores = {dim: 0 for dim in dimensions}
+
+    for article in articles:
+        title = (article.get('title', '') or '').lower()
+        desc  = (article.get('description', '') or '').lower()
+        text  = f"{title} {desc}"
+
+        for dim, ladder in dimensions.items():
+            # Find highest level matched in this article for this dimension
+            for level in range(5, 0, -1):
+                phrases = ladder.get(level, [])
+                if any(phrase.lower() in text for phrase in phrases):
+                    if level > scores[dim]:
+                        scores[dim] = level
+                    break
+
+    scores['max'] = max(scores.values()) if scores else 0
+    scores['active_count'] = sum(1 for dim in dimensions if scores[dim] >= 3)
+    return scores
+
+
+# ============================================
 # THEATRE SCORE
 # ============================================
 
-def _compute_theatre_score(actor_results, vectors):
+def _compute_theatre_score(actor_results, vectors, regime_signals=None):
     """
     Compute the Russia theatre score 0-100.
 
@@ -1558,6 +1819,14 @@ def _compute_theatre_score(actor_results, vectors):
       Belarus:               1.0
       Convergence bonus:     +10 if 3+ vectors simultaneously at L3+
       Arctic convergence:    +5 if arctic L3+ AND Greenland signal
+      Regime signal modifier: +1 per active regime dimension (L3+), capped at +5
+
+    v1.2 (May 7 2026) — adds optional regime_signals parameter. When 3+ regime
+    signals fire at L3+, applies a capped +5 modifier reflecting that Russia is
+    contributing to structural-system fragmentation (parallel arms trade,
+    dedollarization rhetoric, shadow fleet, BRICS Pay, yuan settlement).
+    The cap prevents rhetoric noise from inflating the score; only L3+
+    (Confrontation level) signals count toward the modifier.
     """
     score = 0.0
 
@@ -1595,6 +1864,20 @@ def _compute_theatre_score(actor_results, vectors):
     # Arctic convergence bonus (when Arctic signals rise with Greenland)
     if arc_level >= 3:
         score += 5
+
+    # ── v1.2 (May 7 2026): Regime Signal Modifier (capped +5) ──
+    # When Russia is contributing to structural-system fragmentation
+    # (arms exports to sanctioned states, dedollarization rhetoric,
+    # shadow fleet, BRICS Pay, yuan settlement), bump the score modestly.
+    # Capped so rhetoric noise can't dominate.
+    if regime_signals:
+        active_count = regime_signals.get('active_count', 0)
+        # +1 per active dimension (L3+), capped at +5
+        regime_modifier = min(active_count, 5)
+        if regime_modifier > 0:
+            score += regime_modifier
+            print(f"[Russia Rhetoric] 🌐 Regime signal modifier: +{regime_modifier} "
+                  f"({active_count} dimensions at L3+)")
 
     score = max(0, min(100, round(score)))
     return score
@@ -1635,10 +1918,16 @@ def _detect_conditional_threats(articles):
 # CROSS-THEATER FINGERPRINT
 # ============================================
 
-def _write_crosstheater_fingerprint(actor_results, vectors):
+def _write_crosstheater_fingerprint(actor_results, vectors, regime_signals=None):
     """
     Write Russia signals to shared Redis cross-theater fingerprint key.
     Readable by ME, WHA, and Asia backends for convergence detection.
+
+    v1.2 (May 7 2026) — adds optional regime_signals parameter. When passed,
+    writes 5 per-dimension levels + 5 active flags + 2 aggregates to the
+    fingerprint so the convergence registry can detect arms_trade_realignment,
+    sanctions_evasion_cluster, dedollarization_drumbeat, and
+    financial_system_fragmentation convergences.
     """
     nuc_level, _ = vectors.get('nuclear',    (0, None))
     arc_level, _ = vectors.get('arctic',     (0, None))
@@ -1646,6 +1935,9 @@ def _write_crosstheater_fingerprint(actor_results, vectors):
 
     # v1.1.0 — Russia-Iran axis level from dedicated actor
     russia_iran_level = actor_results.get('russia_iran_axis', {}).get('escalation_level', 0)
+
+    # v1.2 — Regime signals (safe default if not passed)
+    regime_signals = regime_signals or {}
 
     fingerprint = {
         'russia': {
@@ -1669,6 +1961,26 @@ def _write_crosstheater_fingerprint(actor_results, vectors):
             'dprk_russia_active':    hyb_level >= 3,
             'arctic_elevated':       arc_level >= 3,
             'nuclear_signaling':     nuc_level >= 3,
+
+            # ── Regime Signals (May 7 2026) — Convergence Registry Consumer Surface ──
+            # Per-dimension max levels for the 5 regime-signal sub-detection ladders.
+            # Read by convergence_registry entries: arms_trade_realignment (Russia is
+            # PRIMARY trigger), sanctions_evasion_cluster (shadow fleet), 
+            # dedollarization_drumbeat, financial_system_fragmentation.
+            # Active flag = level >= 3 (Confrontation or above on Russia scale).
+            'russia_arms_export_level':       regime_signals.get('arms_export', 0),
+            'russia_arms_export_active':      regime_signals.get('arms_export', 0) >= 3,
+            'russia_dedollarization_level':   regime_signals.get('dedollarization', 0),
+            'russia_dedollarization_active':  regime_signals.get('dedollarization', 0) >= 3,
+            'russia_shadow_fleet_level':      regime_signals.get('shadow_fleet', 0),
+            'russia_shadow_fleet_active':     regime_signals.get('shadow_fleet', 0) >= 3,
+            'russia_brics_alignment_level':   regime_signals.get('brics_alignment', 0),
+            'russia_brics_alignment_active':  regime_signals.get('brics_alignment', 0) >= 3,
+            'russia_yuan_settlement_level':   regime_signals.get('yuan_settlement', 0),
+            'russia_yuan_settlement_active':  regime_signals.get('yuan_settlement', 0) >= 3,
+            # Aggregate flags for convergence registry simple-AND logic
+            'russia_regime_signals_max':      regime_signals.get('max', 0),
+            'russia_regime_signals_active':   regime_signals.get('active_count', 0),
         }
     }
 
@@ -1702,7 +2014,22 @@ def run_russia_rhetoric_scan(force=False):
 
         articles = _fetch_all_articles()
         actor_results, vectors = _classify_articles(articles)
-        theatre_score = _compute_theatre_score(actor_results, vectors)
+
+        # ── Regime Signals (May 7 2026) ──
+        # Five sub-detection ladders for Russia's contribution to structural shifts
+        # in the international system. Output feeds (a) cross-theater fingerprint,
+        # (b) score modifier (capped +5).
+        regime_signals = _score_russia_regime_signals(articles)
+        if regime_signals.get('active_count', 0) > 0:
+            active_dims = [d for d in
+                           ['arms_export', 'dedollarization', 'shadow_fleet',
+                            'brics_alignment', 'yuan_settlement']
+                           if regime_signals.get(d, 0) >= 3]
+            print(f"[Russia Rhetoric] 🌐 Regime signals: {regime_signals['active_count']} active "
+                  f"({', '.join(active_dims)}) — max L{regime_signals['max']}")
+
+        theatre_score = _compute_theatre_score(actor_results, vectors,
+                                                regime_signals=regime_signals)
         conditional_threats = _detect_conditional_threats(articles)
 
         # Vector level labels
@@ -1745,6 +2072,11 @@ def run_russia_rhetoric_scan(force=False):
             'arctic_label':         _lvl(arc_level),
             'hybrid_level':         hyb_level,
             'hybrid_label':         _lvl(hyb_level),
+            # ── Regime Signals (May 7 2026) ──
+            # Per-dimension max levels for cross-theater fingerprint + GPI consumption.
+            'regime_signals':              regime_signals,
+            'regime_signals_active_count': regime_signals.get('active_count', 0),
+            'regime_signals_max_level':    regime_signals.get('max', 0),
             # Metadata
             'total_articles':       len(articles),
             'articles_classified':  sum(a.get('statement_count', 0) for a in actor_results.values()),
@@ -1785,7 +2117,8 @@ def run_russia_rhetoric_scan(force=False):
             'arc_level':   arc_level,
             'hyb_level':   hyb_level,
         })
-        _write_crosstheater_fingerprint(actor_results, vectors)
+        _write_crosstheater_fingerprint(actor_results, vectors,
+                                         regime_signals=regime_signals)
 
         print(f"[Russia Rhetoric] Scan complete: score={theatre_score}, "
               f"nuc=L{nuc_level}, gnd=L{gnd_level}, nato=L{nat_level}, "

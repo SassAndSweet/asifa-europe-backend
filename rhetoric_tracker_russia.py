@@ -95,10 +95,6 @@ except ImportError:
 
 # ============================================
 # CONFIG
-# ============================================from flask import jsonify, request
-
-# ============================================
-# CONFIG
 # ============================================
 UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL') or os.environ.get('UPSTASH_REDIS_REST_URL')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN') or os.environ.get('UPSTASH_REDIS_REST_TOKEN')
@@ -724,11 +720,6 @@ GROUND_OPS_TRIGGERS = {
         'nikopol', 'kherson shelling', 'mykolaiv attack',
         'russian drone kills', 'russian attack kills',
         'russia bombs ukraine', 'russia hits civilian',
-    ], 2: [
-        'russia ukraine front', 'ukraine fighting',
-        'ukraine battle', 'russia ukraine war',
-        'russia strikes ukraine', 'russian missile ukraine',
-        'russian drone ukraine', 'shahed ukraine',
     ],
     1: [
         'ukraine war', 'russia ukraine', 'ukraine conflict',

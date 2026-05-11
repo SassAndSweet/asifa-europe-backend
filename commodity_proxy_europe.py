@@ -403,6 +403,68 @@ def register_commodity_proxy(app, start_background=True):
                 'error': f'ME backend unreachable: {str(e)[:120]}',
             }), 200
 
+    # ========================================================================
+    # ABSORPTION SIGNATURES — Proxy passthroughs to ME backend
+    # ========================================================================
+    # The "So What" layer for leader interventions. Detection lives on ME via
+    # absorption_signatures.py. These passthroughs let Europe country pages
+    # call their own regional backend.
+
+    @app.route('/api/europe/absorption-signature/<intervention_id>', methods=['GET', 'OPTIONS'])
+    def api_europe_absorption_signature(intervention_id):
+        """Proxy: single absorption signature, forwards to ME backend."""
+        if request.method == 'OPTIONS':
+            return '', 200
+        intervention_id = (intervention_id or '').strip()
+        try:
+            r = requests.get(
+                f"{ME_BACKEND_URL}/api/absorption-signature/{intervention_id}",
+                timeout=8
+            )
+            if r.status_code == 200:
+                return jsonify(r.json())
+            return jsonify({
+                'success': False,
+                'intervention_id': intervention_id,
+                'signature': None,
+                'has_signature': False,
+                'error': f'ME backend returned {r.status_code}',
+            }), 200
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'intervention_id': intervention_id,
+                'signature': None,
+                'has_signature': False,
+                'error': f'ME backend unreachable: {str(e)[:120]}',
+            }), 200
+
+    @app.route('/api/europe/absorption-signatures', methods=['GET', 'OPTIONS'])
+    def api_europe_absorption_signatures_list():
+        """Proxy: list all known absorption signatures, forwards to ME backend."""
+        if request.method == 'OPTIONS':
+            return '', 200
+        try:
+            r = requests.get(
+                f"{ME_BACKEND_URL}/api/absorption-signatures",
+                timeout=8
+            )
+            if r.status_code == 200:
+                return jsonify(r.json())
+            return jsonify({
+                'success': False,
+                'count': 0,
+                'signatures': [],
+                'error': f'ME backend returned {r.status_code}',
+            }), 200
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'count': 0,
+                'signatures': [],
+                'error': f'ME backend unreachable: {str(e)[:120]}',
+            }), 200
+
     if start_background:
         _start_background_worker()
 
@@ -411,4 +473,7 @@ def register_commodity_proxy(app, start_background=True):
     print("  GET /api/europe/commodity-debug")
     print("  GET /api/europe/leader-interventions")
     print("  GET /api/europe/leader-interventions/<country>")
+    print("  GET /api/europe/leader-interventions/commodity/<commodity>")
+    print("  GET /api/europe/absorption-signature/<intervention_id>")
+    print("  GET /api/europe/absorption-signatures")
     print("  GET /api/europe/leader-interventions/commodity/<commodity>")
